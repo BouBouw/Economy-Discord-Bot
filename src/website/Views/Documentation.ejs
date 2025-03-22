@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <link rel="stylesheet" type="text/css" href="stylesheets.css">
+
+        <title>Discord Template - Dashboard</title>
+
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script src="https://kit.fontawesome.com/faa656be40.js" crossorigin="anonymous"></script>
+    </head>
+    <body>
+        <%- include('Partials/headers'); %>
+        <main class="ml-32 mt-44">
+            <section>
+                <span class="uppercase font-extrabold text-lg">
+                    Documentation
+                </span>
+                <div class="mt-10 rounded-lg p-2 w-[1700px]">
+                    <div class="flex flex-row">
+                        <div class="w-96 bg-slate-50 p-2 rounded-l-lg">
+                            <ul class="flex flex-col space-y-5">
+                                <li>
+                                    <span class="uppercase font-bold">
+                                        Mods
+                                    </span>
+                                </li>
+                                <li class="bg-slate-100 p-0.5 rounded-md">
+                                    <small>
+                                        /ban <span class="text-gray-600">@user [reason]</span>
+                                    </small>
+                                </li>
+                                <li>
+                                    <span class="uppercase font-bold">
+                                        Utils
+                                    </span>
+                                </li>
+                                <li class="bg-slate-100 p-0.5 rounded-md">
+                                    <small>
+                                        /help
+                                    </small>
+                                </li>
+                                <li class="bg-slate-100 p-0.5 rounded-md">
+                                    <small>
+                                        /ping
+                                    </small>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="w-[1500px] bg-slate-200 p-2 rounded-r-lg">
+                            <ul class="flex flex-col space-y-5">
+                                <li>
+                                    &ensp;
+                                </li>
+                                <li>
+                                    <small>
+                                        Bannir un membre d'un serveur
+                                    </small>
+                                </li>
+                                <li>
+                                    &ensp;
+                                </li>
+                                <li>
+                                    <small>
+                                        Page d'aide des commandes du robot
+                                    </small>
+                                </li>
+                                <li>
+                                    <small>
+                                        Réponds "Pong!"
+                                    </small>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <section class="mt-12">
+                <span class="uppercase font-extrabold text-lg">
+                    Patch Notes
+                </span>
+            </section>
+            <section class="mt-12">
+                <span class="uppercase font-extrabold text-lg">
+                    Features
+                </span>
+            </section>
+        </main>
+    </body>
+</html>

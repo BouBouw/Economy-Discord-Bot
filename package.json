@@ -1,0 +1,31 @@
+{
+    "name": "discordbot-template-v14",
+    "version": "1.0.0",
+    "description": "",
+    "main": "index.js",
+    "dependencies": {
+        "@napi-rs/canvas": "^0.1.53",
+        "canvas": "^3.1.0",
+        "colors": "^1.4.0",
+        "cors": "^2.8.5",
+        "discord.js": "^14.15.3",
+        "discord.js-docs": "^0.3.0",
+        "dotenv": "^16.4.5",
+        "ejs": "^3.1.10",
+        "express": "^4.19.2",
+        "express-session": "^1.18.0",
+        "moment": "^2.30.1",
+        "mysql2": "^3.10.1",
+        "parse-ms": "^2.1.0",
+        "passport": "^0.7.0",
+        "passport-discord": "^0.1.4",
+        "path": "^0.12.7"
+    },
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1",
+        "start": "node index.js",
+        "database": "node ./handlers/database.js"
+    },
+    "author": "",
+    "license": "ISC"
+}
