@@ -461,7 +461,7 @@ INSERT INTO `job_grades` (`job_type_id`, `name`, `rank`, `salary`) VALUES
 
 CREATE TABLE `cities` (
   id SERIAL PRIMARY KEY,
-  user_id BIGINT UNIQUE REFERENCES profiles(id) ON DELETE CASCADE,
+  user_id BIGINT UNIQUE REFERENCES profiles(user_id) ON DELETE CASCADE,
   name VARCHAR(255) NOT NULL
 );
 
@@ -537,7 +537,7 @@ CREATE TABLE `taxes` (
 INSERT INTO taxes (city_id, amount, due_date, paid)
 VALUES(1,500, NOW() + INTERVALE '7 days', FALSE);
 -- Appliquer un malus si la taxe n'est pas payée
-/* UPDATE Users 
+/* UPDATE profiles 
 SET balance = balance - 200 
 WHERE id IN (
     SELECT user_id FROM Cities 
@@ -563,7 +563,7 @@ WHERE city_id IN (
 INSERT INTO buildings (name, base_income, upgrade_cost)
 VALUES('Poste de police', 0, 6000);
 
-CREATE TABLE crimes (
+CREATE TABLE `crimes` (
   id SERIAL PRIMARY KEY,
   city_id INT REFERENCES cities(id) ON DELETE CASCADE,
   stolen_amount BIGINT NOT NULL,
@@ -576,18 +576,17 @@ FROM cities
 WHERE id NOT IN (SELECT city_id FROM userBuildings WHERE building_id IN (SELECT id FROM buildings WHERE name == 'Poste de Police'));
 
 /* 
-UPDATE users
+UPDATE profiles
 SET balance = balance - ( SELECT SUM(stloen_amount ) FROM crimes WHERE crimes.city_id = cities.id) WHERE id IN (SELECT user_id from cities)
 */
-
 -- CLASSEMENT DES VILLES LES PLUS RICHES
--- SELECT cities.name, users.balance
+-- SELECT cities.name, profiles.balance
 -- FROM cities
--- JOIN users ON cities.user_id = users.id
--- ORDER BY users.balance DESC
+-- JOIN profiles ON cities.user_id = profiles.id
+-- ORDER BY profiles.balance DESC
 -- LIMIT 10;
 
-CREATE TABLE blackMarket_items (
+CREATE TABLE `blackMarket_items` (
   id SERIAL PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
   base_price BIGINT NOT NULL,
@@ -601,7 +600,7 @@ INSERT INTO blackMarket_items (name, base_price, risk_level, rarity) VALUES
 ('Arme Illégle', 5000, 90, 9),
 ('Données Volées', 3500, 75, 6);
 
-CREATE TABLE blackMarket_stock (
+CREATE TABLE `blackMarket_stock` (
   id SERIAL PRIMARY KEY,
   item_id INT REFERENCES blackMarket_items(id) ON DELETE CASCADE,
   quantity INT NOT NULL DEFAULT 10,
@@ -618,9 +617,9 @@ FROM blackMarket_items
 WHERE blackMarket_stock.item_id = blackMarket_items.id;
 */
 
-CREATE TABLE blackMarket_transactions (
+CREATE TABLE `blackMarket_transactions` (
   id SERIAL PRIMARY KEY,
-  user_id INT REFERENCES users(id) ON DELETE CASCADE,
+  user_id INT REFERENCES profiles(user_id) ON DELETE CASCADE,
   item_id INT REFERENCES blackMarket_items(id) ON DELETE CASCADE,
   quantity INT NOT NULL,
   total_price BIGINT NOT NULL,
@@ -634,24 +633,24 @@ SELECT * FROM blackMarket_transactions
 JOIN blackMarket_items ON blackMarket_transactions.item_id = blackMarket_items.id
 WHERE user_id = 1 AND RANDOM() < (risk_level / 100.0);
 
-CREATE TABLE moneyLaundering (
+CREATE TABLE `moneyLaundering` (
   id SERIAL PRIMARY KEY,
-  user_id INT REFERENCES users(id) ON DELETE CASCADE,
+  user_id INT REFERENCES profiles(user_id) ON DELETE CASCADE,
   dirty_money BIGINT NOT NULL,
   converted_money BIGINT DEFAULT 0,
   status VARCHAR(255) CHECK (status IN ('En cours', 'Echec', 'Réussi')),
   laundering_date TIMESTAMP DEFAULT NOW()
 );
 
-UPDATE moneyLaundering
-SET converted_money = dirty_money * (0.7 + RANDOM() * 0.3),
-    status = CASE 
-      WHEN RANDOM() < 0.8 THEN 'Réussi'
-      ELSE 'Echec'
-    END
-WHERE status = 'En cours';
+-- UPDATE moneyLaundering
+-- SET converted_money = dirty_money * (0.7 + RANDOM() * 0.3),
+--     status = CASE 
+--       WHEN RANDOM() < 0.8 THEN 'Réussi'
+--       ELSE 'Echec'
+--     END
+-- WHERE status = 'En cours';
 
-CREATE TABLE drugFarms (
+CREATE TABLE `drugFarms` (
   id SERIAL PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
   grow_time INTERVAL NOT NULL,
@@ -665,9 +664,9 @@ INSERT INTO drugFarms (name, grow_time, yield_min, yield_max, risk_level) VALUES
 ('Coca', '48 Heures', 10, 25, 50),
 ('Pavot (Opium)', '72 Heures', 15, 30, 70);
 
-CREATE TABLE userFarms (
+CREATE TABLE `userFarms` (
   id SERIAL PRIMARY KEY,
-  user_id INT REFERENCES users(id) ON DELETE CASCADE,
+  user_id INT REFERENCES profiles(user_id) ON DELETE CASCADE,
   farm_id INT REFERENCES drugFarms(id) ON DELETE CASCADE,
   planted_at TIMESTAMP DEFAULT NOW(),
   ready_at TIMESTAMP GENERATED ALWAYS AS (planted_at + (SELECT grow_time FROM drugFarms.id = farm_id)) STORED,
@@ -687,9 +686,9 @@ INSERT INTO userFarms (user_id, farm_id, planted_at) VALUES
 -- FROM userFarms
 -- WHERE user_id = 1 AND harvested = TRUE;
 
-CREATE TABLE drugDeals (
+CREATE TABLE `drugDeals` (
   id SERIAL PRIMARY KEY,
-  seller_id INT REFERENCES users(id) ON DELETE CASCADE,
+  seller_id INT REFERENCES profiles(user_id) ON DELETE CASCADE,
   buyer_type VARCHAR(50) CHECK (buyer_type IN ('PNJ', 'Joueur')),
   buyer_id INT NULL,
   drug_name VARCHAR(255) NOT NULL,
@@ -709,9 +708,9 @@ CREATE TABLE drugDeals (
 -- SELECT * FROM drugDeal
 -- WHERE seller_id = 1 AND RANDOM() < (risk_level / 100.0)
 
-CREATE TABLE hideouts (
+CREATE TABLE `hideouts` (
   id SERIAL PRIMARY KEY,
-  ower_id INT REFERENCES users(id) ON DELETE CASCADE,
+  ower_id INT REFERENCES profiles(user_id) ON DELETE CASCADE,
   capacity INT NOT NULL,
   security_level INT CHECK (security_level BETWEEN 1 AND 100) DEFAULT 50 -- Protège des raids policiers
 );
@@ -719,9 +718,9 @@ CREATE TABLE hideouts (
 INSERT INTO hideout_invetory (hideout_id, item_name, quantity)
 VALUES (1, 'Coca, 20')
 
-CREATE TABLE drugDealers (
+CREATE TABLE `drugDealers` (
   id SERIAL PRIMARY KEY,
-  owern_id INT REFERENCES users(id) ON DELETE CASCADE,
+  owern_id INT REFERENCES profiles(user_id) ON DELETE CASCADE,
   efficiency FLOAT CHECK (efficiency BETWEEN 0.5 AND 2.0) -- Influence le profit
   risk_level INT CHECK (risk_level BETWEEN 1 AND 100)
 );
@@ -731,6 +730,6 @@ CREATE TABLE drugDealers (
 -- WHERE user_id (SELECT owner_id FROM drugDealers WHERE id = 1)
 -- AND item_name = 'Canabis';
 
--- UPDATE users
+-- UPDATE profiles
 -- SET balance = balance + (5 * 1200 * (SELECT efficiency FROM drugDealers FROM drugDealers WHERE id = 1))
 -- WHERE id = (SELECT owner_id FROM drugDealers WHERE id = 1);
