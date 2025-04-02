@@ -10,7 +10,6 @@ function CardNumber(identifiant) {
     const sequences = [];
 
     for (let i = 0; i < idString.length; i += 4) {
-        // Extraire une séquence de 4 chiffres
         const sequence = idString.slice(i, i + 4);
         sequences.push(sequence);
     }
@@ -25,7 +24,7 @@ function formatMoney(amount) {
     }).format(amount);
 }
 
-const Developer = async (interaction, type) => {
+const Banks = async (interaction, type) => {
     const profile = await Profiles.getProfile(interaction.user);
     const { ctx, canvas } = await FrameGenerator(profile);
 
@@ -432,4 +431,4 @@ const Developer = async (interaction, type) => {
     };
 };
 
-module.exports = Developer;
+module.exports = Banks;

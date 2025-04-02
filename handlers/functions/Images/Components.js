@@ -78,9 +78,25 @@ async function CardsImage(user) {
     return cardMapping[profile.credit_card];
 }
 
+async function NextCardsImage(user) {
+    const profile = await Profiles.getProfile(user);
+
+    const cardMapping = {
+        0: "https://imgur.com/O8TEFuq.png",
+        1: "https://imgur.com/A6kAOnB.png",
+        2: "https://imgur.com/aUVIDwD.png",
+        3: "https://imgur.com/lYQPpW1.png",
+        4: "https://imgur.com/PSuXEsu.png",
+        5: "https://imgur.com/kXjMGGO.png"
+    }
+
+    return cardMapping[profile.credit_card + 1];
+}
+
 const Components = {
     Headers,
-    CardsImage
+    CardsImage,
+    NextCardsImage
 }
 
 module.exports = Components;
