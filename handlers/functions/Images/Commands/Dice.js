@@ -8,7 +8,7 @@ const DiceRenderer = async (interaction, options) => {
     const { 
         bet = 0,
         diceValue = 1,
-        winAmount = 0,
+        winAmount = null,
         rolling = false
     } = options;
 
@@ -118,13 +118,6 @@ const DiceRenderer = async (interaction, options) => {
         ctx.textAlign = 'right';
         ctx.fillText(betText, CANVAS_WIDTH - 30, CANVAS_HEIGHT - 25);
         ctx.textAlign = 'left';
-        
-        if (winAmount > 0) {
-            ctx.fillStyle = '#2ecc71';
-            ctx.font = 'bold 28px Arial';
-            ctx.textAlign = 'right';
-            ctx.fillText(`GAIN: ${Utils.formatMoney(winAmount)} €`, CANVAS_WIDTH - 30, 90);
-        }
     };
 
     const drawButton = () => {
@@ -157,15 +150,39 @@ const DiceRenderer = async (interaction, options) => {
     };
 
     const drawWinEffect = () => {
-        if (winAmount <= 0) return;
+        if(winAmount === null) return;
         
-        ctx.fillStyle = '#ffd700';
-        ctx.font = 'bold 36px Arial';
-        ctx.textAlign = 'center';
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
-        ctx.shadowBlur = 10;
-        ctx.fillText('GAGNÉ!', CANVAS_WIDTH / 2, 80);
-        ctx.shadowColor = 'transparent';
+        if (winAmount > 0) {
+            ctx.fillStyle = '#2ECC71';
+            ctx.font = "bold 30px 'Arial', sans-serif";
+            ctx.textAlign = 'center';
+            
+            // Fond semi-transparent
+            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            ctx.beginPath();
+            ctx.roundRect(CANVAS_WIDTH/2 - 200, CANVAS_HEIGHT/2 - 25, 400, 50, 10);
+            ctx.fill();
+            
+            // Texte du résultat
+            ctx.fillStyle = '#2ECC71';
+            ctx.fillText(`GAGNÉ: +${Utils.formatMoney(winAmount)} €` , CANVAS_WIDTH/2, CANVAS_HEIGHT/2 + 10);
+            ctx.textAlign = 'left';
+        } else {
+            ctx.fillStyle = '#E74C3C';
+            ctx.font = "bold 30px 'Arial', sans-serif";
+            ctx.textAlign = 'center';
+            
+            // Fond semi-transparent
+            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            ctx.beginPath();
+            ctx.roundRect(CANVAS_WIDTH/2 - 200, CANVAS_HEIGHT/2 - 25, 400, 50, 10);
+            ctx.fill();
+            
+            // Texte du résultat
+            ctx.fillStyle = '#E74C3C';
+            ctx.fillText(`PERDU: -${Utils.formatMoney(bet)} €` , CANVAS_WIDTH/2, CANVAS_HEIGHT/2 + 10);
+            ctx.textAlign = 'left';
+        }
     };
 
     try {

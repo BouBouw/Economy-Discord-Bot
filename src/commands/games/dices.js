@@ -99,38 +99,11 @@ module.exports = {
                                             ? `**GAGNÉ!** Vous avez fait ${diceValue} et gagné ${Utils.formatMoney(Number(winAmount))}`
                                             : `**PERDU...** Vous avez fait ${diceValue}`;
 
-                                        const newRow = new ActionRowBuilder()
-                                            .addComponents(
-                                                new ButtonBuilder()
-                                                    .setCustomId('reroll')
-                                                    .setLabel('Relancer')
-                                                    .setStyle(ButtonStyle.Primary),
-                                                new ButtonBuilder()
-                                                    .setCustomId('quit')
-                                                    .setLabel('Quitter')
-                                                    .setStyle(ButtonStyle.Danger)
-                                            );
-
                                         collector.stop();
                                         message.edit({
                                             content: `**RÉSULTAT** - ${resultMessage}\nMise: **${Utils.formatMoney(Number(bet))}**`,
                                             files: [finalAttachment],
-                                            components: [newRow]
-                                        }).then(() => {
-                                            const newCollector = message.createMessageComponentCollector({ time: 30000 });
-
-                                            newCollector.on('collect', async newI => {
-                                                if (newI.customId === 'reroll') {
-                                                    await newI.deferUpdate();
-                                                    newCollector.stop();
-                                                    return collector.emit('collect', i);
-                                                } else if (newI.customId === 'quit') {
-                                                    await newI.deferUpdate();
-                                                    newCollector.stop();
-                                                    return message.edit({ components: [] });
-                                                }
-                                            });
-                                        }).catch(console.error);
+                                        })
                                     });
                                     return;
                                 }
