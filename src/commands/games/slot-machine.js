@@ -10,8 +10,8 @@ const SlotMachineRenderer = require('../../../handlers/functions/Images/Commands
 const Utils = require('../../../handlers/functions/Utils');
 
 module.exports = {
-    name: 'dev',
-    description: '(🎰) Casino - Jouez à la machine à sous',
+    name: 'slot-machine',
+    description: '(🎲) Games',
     type: ApplicationCommandType.ChatInput,
     options: [
         {
@@ -25,13 +25,11 @@ module.exports = {
         const amountInput = interaction.options.getString('montant');
         const bet = Utils.parseAmountInput(amountInput);
 
-        // Configuration des symboles et multiplicateurs
         const SYMBOLS = ['🍒', '🍋', '🍊', '🍇', '🔔', '⭐', '7️⃣', '💰'];
         const MULTIPLIERS = [2, 3, 4, 5, 10, 15, 20, 50];
         const ANIMATION_FRAMES = 10;
-        const ANIMATION_DELAY = 100; // ms
+        const ANIMATION_DELAY = 100;
 
-        // Vérification du profil
         con.query(`SELECT balance FROM profiles WHERE user_id = ?`, [interaction.user.id], (err, result) => {
             if (err) {
                 console.error('Erreur SQL:', err);
@@ -47,7 +45,6 @@ module.exports = {
                 return interaction.reply({ content: "Fonds insuffisants", ephemeral: true });
             }
 
-            // Préparation de l'interface
             const spinButton = new ButtonBuilder()
                 .setCustomId('spin')
                 .setLabel('Tourner la machine')
@@ -56,7 +53,6 @@ module.exports = {
 
             const actionRow = new ActionRowBuilder().addComponents(spinButton);
 
-            // Rendu initial
             SlotMachineRenderer(interaction, {
                 reels: [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
                 bet,
@@ -76,19 +72,15 @@ module.exports = {
                             return i.reply({ content: "Ce n'est pas votre partie!", ephemeral: true });
                         }
 
-                        // Désactivation du bouton pendant l'animation
                         spinButton.setDisabled(true);
                         i.update({
                             components: [new ActionRowBuilder().addComponents(spinButton)]
                         }).then(() => {
-                            // Débit immédiat du solde
                             const newBalance = (userCoins - bet).toFixed(2);
                             con.query(`UPDATE profiles SET balance = ? WHERE user_id = ?`, [newBalance, interaction.user.id]);
 
-                            // Fonction d'animation récursive
                             const animateSpin = (frame) => {
                                 if (frame >= ANIMATION_FRAMES) {
-                                    // Animation terminée, résultat final
                                     const finalReels = generateReels();
                                     const winAmount = calculateWin(finalReels, bet);
 
@@ -100,7 +92,6 @@ module.exports = {
                                     }).then(finalRender => {
                                         const finalAttachment = new AttachmentBuilder(finalRender.toBuffer(), { name: 'slot.png' });
                                         
-                                        // Mise à jour du solde si gain
                                         if (winAmount > 0) {
                                             const updatedBalance = (parseFloat(newBalance) + winAmount).toFixed(2);
                                             con.query(`UPDATE profiles SET balance = ? WHERE user_id = ?`, [updatedBalance, interaction.user.id]);
@@ -120,7 +111,6 @@ module.exports = {
                                     return;
                                 }
 
-                                // Frame d'animation
                                 const spinningReels = generateReels();
                                 SlotMachineRenderer(interaction, {
                                     reels: spinningReels,
@@ -140,7 +130,6 @@ module.exports = {
                                 });
                             };
 
-                            // Lancement de l'animation
                             animateSpin(0);
                         });
                     });
@@ -155,9 +144,7 @@ module.exports = {
             });
         });
 
-        // Fonctions utilitaires
         function randomSymbol() {
-            // Génère un nombre entre 0 et 7 inclus
             return Math.floor(Math.random() * 8);
         }
 
@@ -167,15 +154,12 @@ module.exports = {
                 [randomSymbol(), randomSymbol(), randomSymbol()],
                 [randomSymbol(), randomSymbol(), randomSymbol()]
             ];
-            console.log("Reels générés:", reels);
             return reels;
         }
 
         function calculateWin(reels, betAmount) {
-            // Vérification de la ligne du milieu
             const middleLine = [reels[0][1], reels[1][1], reels[2][1]];
             
-            // 3 symboles identiques
             if (new Set(middleLine).size === 1) {
                 return betAmount * MULTIPLIERS[middleLine[0]];
             }
