@@ -11,7 +11,7 @@ const Utils = require('../../../handlers/functions/Utils');
 
 module.exports = {
     name: 'dice',
-    description: '(🎲) Jeu de dés',
+    description: '(🎲) Games',
     type: ApplicationCommandType.ChatInput,
     options: [
         {

@@ -4,14 +4,14 @@ const {
     ButtonBuilder, 
     ActionRowBuilder, 
     ButtonStyle, 
-    AttachmentBuilder
+    AttachmentBuilder,
 } = require('discord.js');
-const SlotMachineRenderer = require('../../../handlers/functions/Images/Commands/SlotMachine');
+const RouletteRenderer = require('../../../handlers/functions/Images/Commands/Roulette');
 const Utils = require('../../../handlers/functions/Utils');
 
 module.exports = {
-    name: 'dev',
-    description: '(🎰) Casino - Jouez à la machine à sous',
+    name: 'roulette',
+    description: '(🎲) Games',
     type: ApplicationCommandType.ChatInput,
     options: [
         {
@@ -19,23 +19,40 @@ module.exports = {
             description: "Montant à miser",
             type: ApplicationCommandOptionType.String,
             required: true,
+        },
+        {
+            name: "type",
+            description: "Type de mise",
+            type: ApplicationCommandOptionType.String,
+            required: true,
+            choices: [
+                { name: "Rouge", value: "red" },
+                { name: "Noir", value: "black" },
+                { name: "Pair", value: "even" },
+                { name: "Impair", value: "odd" },
+                { name: "1-18", value: "1to18" },
+                { name: "19-36", value: "19to36" },
+                { name: "1-12", value: "1to12" },
+                { name: "13-24", value: "13to24" },
+                { name: "25-36", value: "25to36" }
+            ]
         }
     ],
     execute: (client, interaction, args, con) => {
         const amountInput = interaction.options.getString('montant');
+        const betType = interaction.options.getString('type');
         const bet = Utils.parseAmountInput(amountInput);
+        const ANIMATION_FRAMES = 15;
+        const ANIMATION_DELAY = 100;
 
-        // Configuration des symboles et multiplicateurs
-        const SYMBOLS = ['🍒', '🍋', '🍊', '🍇', '🔔', '⭐', '7️⃣', '💰'];
-        const MULTIPLIERS = [2, 3, 4, 5, 10, 15, 20, 50];
-        const ANIMATION_FRAMES = 10;
-        const ANIMATION_DELAY = 100; // ms
-
-        // Vérification du profil
         con.query(`SELECT balance FROM profiles WHERE user_id = ?`, [interaction.user.id], (err, result) => {
             if (err) {
                 console.error('Erreur SQL:', err);
                 return interaction.reply({ content: "Erreur de base de données", ephemeral: true });
+            }
+
+            if (result.length === 0) {
+                return interaction.reply({ content: "Profil non trouvé", ephemeral: true });
             }
 
             const userCoins = parseFloat(result[0].balance);
@@ -43,25 +60,23 @@ module.exports = {
                 return interaction.reply({ content: "Fonds insuffisants", ephemeral: true });
             }
 
-            // Préparation de l'interface
             const spinButton = new ButtonBuilder()
                 .setCustomId('spin')
-                .setLabel('Tourner la machine')
+                .setLabel('Faire tourner la roue')
                 .setStyle(ButtonStyle.Primary)
                 .setEmoji('🎰');
 
             const actionRow = new ActionRowBuilder().addComponents(spinButton);
 
-            // Rendu initial
-            SlotMachineRenderer(interaction, {
-                reels: [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
+            RouletteRenderer(interaction, {
                 bet,
-                symbols: SYMBOLS
+                bets: [{ type: betType, amount: bet }],
+                spinning: false
             }).then(initialRender => {
-                const initialAttachment = new AttachmentBuilder(initialRender.toBuffer(), { name: 'slot.png' });
+                const initialAttachment = new AttachmentBuilder(initialRender.toBuffer(), { name: 'roulette.png' });
 
                 interaction.reply({ 
-                    content: `**MACHINE À SOUS** - Mise: **${Utils.formatMoney(Number(bet))}**`,
+                    content: `**ROULETTE** - Mise: **${Utils.formatMoney(Number(bet))}** sur ${betType}`,
                     files: [initialAttachment],
                     components: [actionRow]
                 }).then(message => {
@@ -72,39 +87,36 @@ module.exports = {
                             return i.reply({ content: "Ce n'est pas votre partie!", ephemeral: true });
                         }
 
-                        // Désactivation du bouton pendant l'animation
                         spinButton.setDisabled(true);
                         i.update({
                             components: [new ActionRowBuilder().addComponents(spinButton)]
                         }).then(() => {
-                            // Débit immédiat du solde
                             const newBalance = (userCoins - bet).toFixed(2);
                             con.query(`UPDATE profiles SET balance = ? WHERE user_id = ?`, [newBalance, interaction.user.id]);
 
-                            // Fonction d'animation récursive
                             const animateSpin = (frame) => {
                                 if (frame >= ANIMATION_FRAMES) {
-                                    // Animation terminée, résultat final
-                                    const finalReels = generateReels();
-                                    const winAmount = calculateWin(finalReels, bet);
+                                    const winningNumber = Math.floor(Math.random() * 37); // 0-36
+                                    const isWin = checkWin(betType, winningNumber);
+                                    const winAmount = isWin ? calculateWin(betType, bet) : 0;
 
-                                    SlotMachineRenderer(interaction, {
-                                        reels: finalReels,
+                                    RouletteRenderer(interaction, {
                                         bet,
                                         winAmount,
-                                        symbols: SYMBOLS
+                                        winningNumber,
+                                        spinning: false,
+                                        bets: [{ type: betType, amount: bet }]
                                     }).then(finalRender => {
-                                        const finalAttachment = new AttachmentBuilder(finalRender.toBuffer(), { name: 'slot.png' });
+                                        const finalAttachment = new AttachmentBuilder(finalRender.toBuffer(), { name: 'roulette.png' });
                                         
-                                        // Mise à jour du solde si gain
-                                        if (winAmount > 0) {
+                                        if (isWin) {
                                             const updatedBalance = (parseFloat(newBalance) + winAmount).toFixed(2);
                                             con.query(`UPDATE profiles SET balance = ? WHERE user_id = ?`, [updatedBalance, interaction.user.id]);
                                         }
 
-                                        const resultMessage = winAmount > 0 
-                                            ? `**GAGNÉ!** +${Utils.formatMoney(Number(winAmount))} (x${winAmount / bet})`
-                                            : "**Perdu...** Essayez encore!";
+                                        const resultMessage = isWin 
+                                            ? `**GAGNÉ!** Le numéro ${winningNumber} est sorti. Vous gagnez ${Utils.formatMoney(Number(winAmount))}`
+                                            : `**PERDU...** Le numéro ${winningNumber} est sorti.`;
 
                                         collector.stop();
                                         message.edit({
@@ -116,27 +128,23 @@ module.exports = {
                                     return;
                                 }
 
-                                // Frame d'animation
-                                const spinningReels = generateReels();
-                                SlotMachineRenderer(interaction, {
-                                    reels: spinningReels,
-                                    spinning: true,
+                                RouletteRenderer(interaction, {
                                     bet,
-                                    symbols: SYMBOLS
+                                    spinning: true,
+                                    bets: [{ type: betType, amount: bet }]
                                 }).then(spinningRender => {
-                                    const spinningAttachment = new AttachmentBuilder(spinningRender.toBuffer(), { name: 'slot.png' });
+                                    const spinningAttachment = new AttachmentBuilder(spinningRender.toBuffer(), { name: 'roulette.png' });
                                     
                                     message.edit({
                                         files: [spinningAttachment]
                                     }).then(() => {
                                         setTimeout(() => {
                                             animateSpin(frame + 1);
-                                        }, ANIMATION_DELAY + frame * 50);
+                                        }, ANIMATION_DELAY);
                                     });
                                 });
                             };
 
-                            // Lancement de l'animation
                             animateSpin(0);
                         });
                     });
@@ -147,36 +155,44 @@ module.exports = {
                 });
             }).catch(error => {
                 console.error('Erreur de rendu:', error);
-                interaction.reply({ content: "Erreur lors du rendu de la machine à sous", ephemeral: true });
+                interaction.reply({ content: "Erreur lors du rendu de la roulette", ephemeral: true });
             });
         });
 
-        // Fonctions utilitaires
-        function randomSymbol() {
-            // Génère un nombre entre 0 et 7 inclus
-            return Math.floor(Math.random() * 8);
-        }
-
-        function generateReels() {
-            const reels = [
-                [randomSymbol(), randomSymbol(), randomSymbol()],
-                [randomSymbol(), randomSymbol(), randomSymbol()],
-                [randomSymbol(), randomSymbol(), randomSymbol()]
-            ];
-            console.log("Reels générés:", reels);
-            return reels;
-        }
-
-        function calculateWin(reels, betAmount) {
-            // Vérification de la ligne du milieu
-            const middleLine = [reels[0][1], reels[1][1], reels[2][1]];
+        function checkWin(betType, number) {
+            const isRed = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36].includes(number);
+            const isBlack = [2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35].includes(number);
             
-            // 3 symboles identiques
-            if (new Set(middleLine).size === 1) {
-                return betAmount * MULTIPLIERS[middleLine[0]];
+            switch(betType) {
+                case 'red': return isRed;
+                case 'black': return isBlack;
+                case 'even': return number !== 0 && number % 2 === 0;
+                case 'odd': return number % 2 === 1;
+                case '1to18': return number >= 1 && number <= 18;
+                case '19to36': return number >= 19 && number <= 36;
+                case '1to12': return number >= 1 && number <= 12;
+                case '13to24': return number >= 13 && number <= 24;
+                case '25to36': return number >= 25 && number <= 36;
+                default: return false;
             }
-            
-            return 0;
+        }
+
+        function calculateWin(betType, betAmount) {
+            switch(betType) {
+                case 'red':
+                case 'black':
+                case 'even':
+                case 'odd':
+                case '1to18':
+                case '19to36':
+                    return betAmount * 2;
+                case '1to12':
+                case '13to24':
+                case '25to36':
+                    return betAmount * 3;
+                default:
+                    return 0;
+            }
         }
     }
 };

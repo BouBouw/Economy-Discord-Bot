@@ -16,7 +16,7 @@ const SlotMachineRenderer = async (interaction, options) => {
     const { 
         reels = [[0, 0, 0], [0, 0, 0], [0, 0, 0]], 
         bet = 0, 
-        winAmount = 0,
+        winAmount = null,
         spinning = false,
         symbols = ['🍒', '🍋', '🍊', '🍇', '🔔', '⭐', '7️⃣', '💰']
     } = options;
@@ -158,7 +158,7 @@ const SlotMachineRenderer = async (interaction, options) => {
         ctx.textAlign = 'center';
         ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
         ctx.shadowBlur = 5;
-        ctx.fillText('🎰 SLOT MACHINE 🎰', CANVAS_WIDTH/2, 40);
+        ctx.fillText('MACHINE A SOUS', CANVAS_WIDTH/2, 40);
         ctx.shadowColor = 'transparent';
         
         // Mise
@@ -226,18 +226,39 @@ const SlotMachineRenderer = async (interaction, options) => {
 
     // Effet de gain amélioré
     const drawWinEffect = () => {
-        if (winAmount <= 0) return;
-        
-        // Effet de particules dorées
-        
-        // Texte de gain
-        ctx.fillStyle = '#ffd700';
-        ctx.font = 'bold 36px Arial';
-        ctx.textAlign = 'center';
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
-        ctx.shadowBlur = 10;
-        ctx.fillText('GAGNÉ!', CANVAS_WIDTH / 2, 80);
-        ctx.shadowColor = 'transparent';
+        if(winAmount === null) return;
+
+        if (winAmount > 0) {
+            ctx.fillStyle = '#2ECC71';
+            ctx.font = "bold 30px 'Arial', sans-serif";
+            ctx.textAlign = 'center';
+            
+            // Fond semi-transparent
+            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            ctx.beginPath();
+            ctx.roundRect(CANVAS_WIDTH/2 - 200, CANVAS_HEIGHT/2 - 25, 400, 50, 10);
+            ctx.fill();
+            
+            // Texte du résultat
+            ctx.fillStyle = '#2ECC71';
+            ctx.fillText(`GAGNÉ: +${Utils.formatMoney(winAmount)} €` , CANVAS_WIDTH/2, CANVAS_HEIGHT/2 + 10);
+            ctx.textAlign = 'left';
+        } else {
+            ctx.fillStyle = '#E74C3C';
+            ctx.font = "bold 30px 'Arial', sans-serif";
+            ctx.textAlign = 'center';
+            
+            // Fond semi-transparent
+            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            ctx.beginPath();
+            ctx.roundRect(CANVAS_WIDTH/2 - 200, CANVAS_HEIGHT/2 - 25, 400, 50, 10);
+            ctx.fill();
+            
+            // Texte du résultat
+            ctx.fillStyle = '#E74C3C';
+            ctx.fillText(`PERDU: -${Utils.formatMoney(bet)} €` , CANVAS_WIDTH/2, CANVAS_HEIGHT/2 + 10);
+            ctx.textAlign = 'left';
+        }
     };
 
     try {

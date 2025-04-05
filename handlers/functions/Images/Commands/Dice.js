@@ -96,7 +96,7 @@ const DiceRenderer = async (interaction, options) => {
         ctx.textAlign = 'center';
         ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
         ctx.shadowBlur = 5;
-        ctx.fillText('🎲 JEU DE DÉS 🎲', CANVAS_WIDTH/2, 50);
+        ctx.fillText('JEU DE DÉS', CANVAS_WIDTH/2, 50);
         ctx.shadowColor = 'transparent';
         
         const betText = `MISE: ${Utils.formatMoney(Number(bet))} €`;
@@ -151,7 +151,7 @@ const DiceRenderer = async (interaction, options) => {
 
     const drawWinEffect = () => {
         if(winAmount === null) return;
-        
+
         if (winAmount > 0) {
             ctx.fillStyle = '#2ECC71';
             ctx.font = "bold 30px 'Arial', sans-serif";

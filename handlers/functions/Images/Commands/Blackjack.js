@@ -144,7 +144,7 @@ const BlackjackRenderer = async (interaction, options) => {
         ctx.fillStyle = '#f1c40f';
         ctx.font = "bold 28px 'Arial', sans-serif";
         ctx.textAlign = 'center';
-        ctx.fillText('♠ BLACKJACK ♥', CANVAS_WIDTH/2, 40);
+        ctx.fillText('BLACKJACK', CANVAS_WIDTH/2, 40);
         ctx.textAlign = 'left';
 
         // Main du croupier (position remontée)
