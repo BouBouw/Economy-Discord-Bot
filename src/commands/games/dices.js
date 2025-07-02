@@ -33,10 +33,6 @@ module.exports = {
                 return interaction.reply({ content: "Erreur de base de données", ephemeral: true });
             }
 
-            if (result.length === 0) {
-                return interaction.reply({ content: "Profil non trouvé", ephemeral: true });
-            }
-
             const userCoins = parseFloat(result[0].balance);
             if (bet > userCoins) {
                 return interaction.reply({ content: "Fonds insuffisants", ephemeral: true });
@@ -44,7 +40,7 @@ module.exports = {
 
             const rollButton = new ButtonBuilder()
                 .setCustomId('roll')
-                .setLabel('Lancer les dés')
+                .setLabel('Lancer le dé')
                 .setStyle(ButtonStyle.Primary)
                 .setEmoji('🎲');
 
@@ -58,7 +54,7 @@ module.exports = {
                 const initialAttachment = new AttachmentBuilder(initialRender.toBuffer(), { name: 'dice.png' });
 
                 interaction.reply({ 
-                    content: `**JEU DE DÉS** - Mise: **${Utils.formatMoney(Number(bet))}**`,
+                    content: `**JEU DE DÉS** - Mise: **${Utils.formatMoney(Number(bet))} €**`,
                     files: [initialAttachment],
                     components: [actionRow]
                 }).then(message => {
@@ -96,12 +92,12 @@ module.exports = {
                                         }
 
                                         const resultMessage = isWin 
-                                            ? `**GAGNÉ!** Vous avez fait ${diceValue} et gagné ${Utils.formatMoney(Number(winAmount))}`
+                                            ? `**GAGNÉ!** Vous avez fait ${diceValue} et gagné **${Utils.formatMoney(Number(winAmount))} €**`
                                             : `**PERDU...** Vous avez fait ${diceValue}`;
 
                                         collector.stop();
                                         message.edit({
-                                            content: `**RÉSULTAT** - ${resultMessage}\nMise: **${Utils.formatMoney(Number(bet))}**`,
+                                            content: `${resultMessage}\nMise: **${Utils.formatMoney(Number(bet))} €**`,
                                             files: [finalAttachment],
                                         })
                                     });

@@ -1,0 +1,16 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\handlers",
+    "\\handlers\\functions",
+    "\\handlers\\functions\\Games",
+    "\\handlers\\functions\\Images\\Commands",
+    "\\src",
+    "\\src\\commands",
+    "\\src\\commands\\games",
+    "\\src\\commands\\groups",
+    "\\src\\commands\\utils"
+  ],
+  "SelectedNode": "\\handlers\\functions\\Games\\Tables.js",
+  "PreviewInSolutionExplorer": false
+}

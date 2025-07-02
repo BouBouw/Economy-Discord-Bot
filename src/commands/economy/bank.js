@@ -13,8 +13,6 @@ execute: async (client, interaction, args, con) => {
         type: 'bank_account'
     }
 
-    const profile = await Profiles.getProfile(interaction.user);
-
     let { canvas } = await Banks(interaction, settings.type);
     const img = await ImageBuffer(canvas);
 

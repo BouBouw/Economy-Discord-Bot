@@ -9,7 +9,7 @@ router.get('/', async (req, res) => {
     res.render('Welcome', {
         user: req.user,
         bot: client,
-        db: connection
+        db: connection,
     })
 });
 

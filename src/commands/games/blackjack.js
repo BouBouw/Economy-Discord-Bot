@@ -65,10 +65,6 @@ module.exports = {
                 return interaction.reply({ content: "Erreur de base de données", ephemeral: true });
             }
 
-            if (result.length === 0) {
-                return interaction.reply({ content: "Profil non trouvé", ephemeral: true });
-            }
-
             const userCoins = parseFloat(result[0].balance);
             if (bet > userCoins) {
                 return interaction.reply({ content: "Fonds insuffisants", ephemeral: true });
@@ -121,7 +117,7 @@ module.exports = {
                 const actionRow = new ActionRowBuilder().addComponents(hitButton, standButton, doubleButton);
 
                 interaction.reply({ 
-                    content: `**BLACKJACK** - Mise: **${Utils.formatMoney(Number(bet))}**`,
+                    content: `**BLACKJACK** - Mise: **${Utils.formatMoney(Number(bet))} €**`,
                     files: [attachment],
                     components: [actionRow]
                 }).then(message => {
@@ -169,10 +165,10 @@ module.exports = {
                             
                             if (currentDealerScore > 21 || playerScore > currentDealerScore) {
                                 winnings = updatedBet * (isBlackjack ? 2.5 : 2);
-                                resultMessage = `${isBlackjack ? '**Blackjack!** ' : ''}Vous gagnez **${Utils.formatMoney(Number(winnings))}**`;
+                                resultMessage = `${isBlackjack ? '**Blackjack!** ' : ''}Vous gagnez **${Utils.formatMoney(Number(winnings))} €**`;
                             } else if (playerScore < currentDealerScore) {
                                 winnings = -updatedBet;
-                                resultMessage = `Le croupier gagne. Vous perdez **${Utils.formatMoney(Number(updatedBet))}**`;
+                                resultMessage = `Le croupier gagne. Vous perdez **${Utils.formatMoney(Number(updatedBet))} €**`;
                             } else {
                                 resultMessage = "**Égalité!** Vous récupérez votre mise.";
                             }
@@ -203,13 +199,13 @@ module.exports = {
                     
                             collector.stop();
                             await i.editReply({
-                                content: `**RÉSULTAT** - ${resultMessage}\nMise: **${Utils.formatMoney(Number(updatedBet))}**`,
+                                content: `${resultMessage}\nMise: **${Utils.formatMoney(Number(updatedBet))} €**`,
                                 files: [finalAttachment],
                                 components: []
                             });
                         } else {
                             await i.editReply({
-                                content: `**BLACKJACK** - Score actuel: **${calculateScore(playerHand)}**\nMise: **${Utils.formatMoney(Number(updatedBet))}**`,
+                                content: `**BLACKJACK** - Score actuel: **${calculateScore(playerHand)}**\nMise: **${Utils.formatMoney(Number(updatedBet))} €**`,
                                 files: [finalAttachment],
                                 components: [actionRow]
                             });

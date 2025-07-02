@@ -76,7 +76,7 @@ module.exports = {
                 const initialAttachment = new AttachmentBuilder(initialRender.toBuffer(), { name: 'roulette.png' });
 
                 interaction.reply({ 
-                    content: `**ROULETTE** - Mise: **${Utils.formatMoney(Number(bet))}** sur ${betType}`,
+                    content: `**ROULETTE** - Mise: **${Utils.formatMoney(Number(bet))} €** sur ${betType}`,
                     files: [initialAttachment],
                     components: [actionRow]
                 }).then(message => {
@@ -115,12 +115,12 @@ module.exports = {
                                         }
 
                                         const resultMessage = isWin 
-                                            ? `**GAGNÉ!** Le numéro ${winningNumber} est sorti. Vous gagnez ${Utils.formatMoney(Number(winAmount))}`
+                                            ? `**GAGNÉ!** Le numéro ${winningNumber} est sorti. Vous gagnez **${Utils.formatMoney(Number(winAmount))} €**`
                                             : `**PERDU...** Le numéro ${winningNumber} est sorti.`;
 
                                         collector.stop();
                                         message.edit({
-                                            content: `**RÉSULTAT** - ${resultMessage}\nMise: **${Utils.formatMoney(Number(bet))}**`,
+                                            content: `${resultMessage}\nMise: **${Utils.formatMoney(Number(bet))} €**`,
                                             files: [finalAttachment],
                                             components: []
                                         }).catch(console.error);

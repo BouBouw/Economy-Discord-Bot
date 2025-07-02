@@ -1,4 +1,5 @@
 const { ActivityType } = require('discord.js');
+const Group = require('../../../handlers/functions/Games/Groups/Group');
 
 module.exports = {
 	name: 'ready',
@@ -15,6 +16,8 @@ execute: async (client, connection) => {
         ],
         status: "online"
     })
+
+    setInterval(Group.cleanPendingGroups, 3600000);
 
     }
 }

@@ -59,7 +59,7 @@ async function load (client, connection) {
     app.get('/login', require('./routes/Auth/login'));
     app.get('/logout', require('./routes/Auth/logout'));
     
-    app.listen(90, () => console.log(`[WEB] `.bold.blue + `Web server has been started.`.bold.white + ` (http://localhost:90/)`.bold.blue ));
+    app.listen(100, () => console.log(`[WEB] `.bold.blue + `Web server has been started.`.bold.white + ` (http://localhost:90/)`.bold.blue ));
 }
 
 module.exports = {

@@ -24,9 +24,22 @@ function formatMoney(amount) {
     }).format(amount);
 }
 
+function generateRandomUUID() {
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+    let result = '';
+    
+    for (let i = 0; i < 5; i++) {
+      const randomIndex = Math.floor(Math.random() * characters.length);
+      result += characters.charAt(randomIndex);
+    }
+  
+    return result;
+}
+
 const Utils = {
     parseAmountInput,
-    formatMoney
+    formatMoney,
+    generateRandomUUID
 };
 
 module.exports = Utils;
