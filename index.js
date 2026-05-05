@@ -36,7 +36,17 @@ client.on('ready', async () => {
     const handler = new Handler(client);
 
     const commands = await handler.loadCommands();
-    client.application.commands.set(commands.flat());
+
+    // Fetch existing commands to preserve the Entry Point command (type 4)
+    // created automatically by Discord when Activities are enabled (error 50240)
+    const existing = await client.application.commands.fetch();
+    const entryPoints = existing.filter(c => c.type === 4).map(c => ({
+        name: c.name,
+        description: c.description,
+        type: 4,
+    }));
+
+    client.application.commands.set([...commands.flat(), ...entryPoints]);
 
     await handler.loadEvents();
 
