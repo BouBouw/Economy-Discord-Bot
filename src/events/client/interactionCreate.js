@@ -3,7 +3,7 @@ const Profiles = require("../../../handlers/functions/Profiles");
 module.exports = {
 	name: 'interactionCreate',
 	once: false,
-execute: async (interaction, client, con) => {
+execute: async (interaction, client) => {
     await slashCommands();
 
     async function slashCommands() {
@@ -30,7 +30,7 @@ execute: async (interaction, client, con) => {
             interaction.member = interaction.guild.members.cache.get(interaction.user.id);
     
             console.log(`[SLASH COMMANDS] `.bold.red + `/${cmd.name}`.bold.blue + ` has been executed`.bold.white)
-            cmd.execute(client, interaction, args, con);
+            cmd.execute(client, interaction, args);
     }
 
     }

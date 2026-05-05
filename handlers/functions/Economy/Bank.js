@@ -1,287 +1,162 @@
-const { connection } = require("../../..");
-const Profiles = require("../Profiles");
+const prisma = require('../../database');
+const Profiles = require('../Profiles');
 
 const cardMapping = {
-    0: {
-        type: 0,
-        sold: 3000,
-        price: 0
-    },
-    1: {
-        type: 1,
-        sold: 5000,
-        price: 500
-    },
-    2: {
-        type: 2,
-        sold: 10000,
-        price: 1000
-    },
-    3: {
-        type: 3,
-        sold: 30000,
-        price: 2000
-    },
-    4: {
-        type: 4,
-        sold: 100000,
-        price: 3000
-    },
-    5: {
-        type: 5,
-        sold: Infinity,
-        price: 5000
-    }
-}
+    0: { type: 0, sold: 3000, price: 0 },
+    1: { type: 1, sold: 5000, price: 500 },
+    2: { type: 2, sold: 10000, price: 1000 },
+    3: { type: 3, sold: 30000, price: 2000 },
+    4: { type: 4, sold: 100000, price: 3000 },
+    5: { type: 5, sold: Infinity, price: 5000 }
+};
 
 const bankTransfert = async (user, target, amount) => {
-    return new Promise((resolve, reject) => {
-        try {
-            // Vérifier le solde de l'utilisateur (balance et in_bank)
-            connection.query(
-                `SELECT balance, in_bank FROM profiles WHERE user_id = ?`,
-                [user.id],
-                function (err, result) {
-                    if (err) return reject(err);
+    const userProfile = await prisma.profile.findFirst({ where: { userId: user.id } });
+    if (!userProfile) throw new Error('Utilisateur non trouvé.');
 
-                    // Vérifier si l'utilisateur existe
-                    if (!result[0]) {
-                        return reject("Utilisateur non trouvé.");
-                    }
+    const totalBalance = parseFloat(userProfile.balance) + parseFloat(userProfile.inBank);
+    if (totalBalance < amount) throw new Error('Solde total insuffisant.');
 
-                    const { balance: userBalance, in_bank: userBankBalance } = result[0];
-                    const totalBalance = parseFloat(userBalance) + parseFloat(userBankBalance);
+    const targetProfile = await prisma.profile.findFirst({ where: { userId: target.id } });
+    if (!targetProfile) throw new Error('Cible non trouvée.');
 
-                    // Vérifier si le solde total est suffisant
-                    if (totalBalance < amount) {
-                        return reject("Solde total insuffisant.");
-                    }
+    let remainingAmount = parseFloat(amount);
+    let newUserBalance = parseFloat(userProfile.balance);
+    let newUserBankBalance = parseFloat(userProfile.inBank);
 
-                    // Vérifier le solde de la cible
-                    connection.query(
-                        `SELECT balance FROM profiles WHERE user_id = ?`,
-                        [target.id],
-                        function (err, result) {
-                            if (err) return reject(err);
+    if (newUserBalance >= remainingAmount) {
+        newUserBalance -= remainingAmount;
+    } else {
+        remainingAmount -= newUserBalance;
+        newUserBalance = 0;
+        newUserBankBalance -= remainingAmount;
+    }
 
-                            // Vérifier si la cible existe
-                            if (!result[0]) {
-                                return reject("Cible non trouvée.");
-                            }
+    await prisma.$transaction([
+        prisma.profile.updateMany({
+            where: { userId: target.id },
+            data: { balance: parseFloat(targetProfile.balance) + parseFloat(amount) }
+        }),
+        prisma.profile.updateMany({
+            where: { userId: user.id },
+            data: { balance: newUserBalance, inBank: newUserBankBalance }
+        })
+    ]);
 
-                            const { balance: targetBalance } = result[0];
-
-                            // Mettre à jour le solde de la cible
-                            const newTargetBalance = parseFloat(targetBalance) + parseFloat(amount);
-                            connection.query(
-                                `UPDATE profiles SET balance = ? WHERE user_id = ?`,
-                                [newTargetBalance, target.id],
-                                function (err, result) {
-                                    if (err) return reject(err);
-
-                                    // Calculer le montant à prélever
-                                    let remainingAmount = parseFloat(amount);
-                                    let newUserBalance = parseFloat(userBalance);
-                                    let newUserBankBalance = parseFloat(userBankBalance);
-
-                                    // Prélever d'abord du solde en poche
-                                    if (newUserBalance >= remainingAmount) {
-                                        newUserBalance -= remainingAmount;
-                                    } else {
-                                        remainingAmount -= newUserBalance;
-                                        newUserBalance = 0;
-
-                                        // Prélever le reste du compte en banque
-                                        newUserBankBalance -= remainingAmount;
-                                    }
-
-                                    // Mettre à jour le solde de l'utilisateur
-                                    connection.query(
-                                        `UPDATE profiles SET balance = ?, in_bank = ? WHERE user_id = ?`,
-                                        [newUserBalance, newUserBankBalance, user.id],
-                                        function (err, result) {
-                                            if (err) return reject(err);
-                                            resolve(true); // Transfert réussi
-                                        }
-                                    );
-                                }
-                            );
-                        }
-                    );
-                }
-            );
-        } catch (err) {
-            reject(err); // Rejeter l'erreur en cas de problème
-        }
-    });
+    return true;
 };
 
 const getAccountTransactions = async (user) => {
-    return new Promise((resolve, reject) => {
-        try {
-            connection.query(`SELECT * 
-            FROM transactions 
-            WHERE user_id = '${user.id}' 
-            ORDER BY created_at DESC 
-            LIMIT 3`, function(err, result) {
-                if(err) throw err;
-                resolve(result);
-            })
-        } catch(err) {
-            reject(err);
+    return prisma.transaction.findMany({
+        where: { userId: user.id },
+        orderBy: { createdAt: 'desc' },
+        take: 3
+    });
+};
+
+const bankDepositAmount = async (user, amount) => {
+    const profile = await prisma.profile.findFirst({ where: { userId: user.id } });
+    if (!profile) return false;
+
+    const balance = parseFloat(profile.balance);
+    if (balance <= 0 || balance < amount) return false;
+
+    await prisma.profile.updateMany({
+        where: { userId: user.id },
+        data: {
+            balance: balance - parseFloat(amount),
+            inBank: parseFloat(profile.inBank) + parseFloat(amount)
         }
-    })
-}
+    });
+    return true;
+};
 
-const bankDepositAmount = (user, amount) => {
-    return new Promise((resolve, reject) => {
-        try {
-            connection.query(`SELECT balance, in_bank
-            FROM profiles
-            WHERE user_id = '${user.id}'`, function(err, result) {
-                if(err) throw err;
+const bankDepositAll = async (user) => {
+    const profile = await prisma.profile.findFirst({ where: { userId: user.id } });
+    if (!profile) return false;
 
-                const { balance, in_bank } = result[0];
-                if(balance <= 0 || balance < amount) return reject(false);
+    const balance = parseFloat(profile.balance);
+    if (balance <= 0) return false;
 
-                const newBalance = parseFloat(balance) - parseFloat(amount);
-                const newInBank = parseFloat(in_bank) + parseFloat(amount);
-                connection.query(`UPDATE profiles
-                SET balance = ${newBalance}, in_bank = ${newInBank}
-                WHERE user_id = '${user.id}'`, function(err, result) {
-                    if(err) throw err;
-                    resolve(true);
-                })
-            })
-        } catch(err) {
-            reject(false)
+    await prisma.profile.updateMany({
+        where: { userId: user.id },
+        data: {
+            balance: 0,
+            inBank: parseFloat(profile.inBank) + balance
         }
-    })
-}
+    });
+    return true;
+};
 
-const bankDepositAll = (user) => {
-    return new Promise((resolve, reject) => {
-        try {
-            connection.query(`SELECT balance, in_bank
-            FROM profiles
-            WHERE user_id = '${user.id}'`, function(err, result) {
-                if(err) throw err;
+const bankWithdrawAmount = async (user, amount) => {
+    const profile = await prisma.profile.findFirst({ where: { userId: user.id } });
+    if (!profile) return false;
 
-                const { balance, in_bank } = result[0];
-                if(balance <= 0) return reject(false);
+    const inBank = parseFloat(profile.inBank);
+    if (inBank <= 0 || inBank < amount) return false;
 
-                const newInBank = parseFloat(in_bank) + parseFloat(balance);
-                connection.query(`UPDATE profiles
-                SET balance = 0, in_bank = ${newInBank}
-                WHERE user_id = '${user.id}'`, function(err, result) {
-                    if(err) throw err;
-                    resolve(true);
-                })
-            })
-        } catch(err) {
-            reject(false)
+    await prisma.profile.updateMany({
+        where: { userId: user.id },
+        data: {
+            balance: parseFloat(profile.balance) + parseFloat(amount),
+            inBank: inBank - parseFloat(amount)
         }
-    })
-}
+    });
+    return true;
+};
 
-const bankWithdrawAmount = (user, amount) => {
-    return new Promise((resolve, reject) => {
-        try {
-            connection.query(`SELECT balance, in_bank
-            FROM profiles
-            WHERE user_id = '${user.id}'`, function(err, result) {
-                if(err) throw err;
+const bankWithdrawAll = async (user) => {
+    const profile = await prisma.profile.findFirst({ where: { userId: user.id } });
+    if (!profile) return false;
 
-                const { balance, in_bank } = result[0];
-                if(in_bank <= 0 || in_bank < amount) return reject(false);
+    const inBank = parseFloat(profile.inBank);
+    if (inBank <= 0) return false;
 
-                const newBalance = parseFloat(balance) + parseFloat(amount);
-                const newInBank = parseFloat(in_bank) - parseFloat(amount);
-                connection.query(`UPDATE profiles
-                SET balance = ${newBalance}, in_bank = ${newInBank}
-                WHERE user_id = '${user.id}'`, function(err, result) {
-                    if(err) throw err;
-                    resolve(true);
-                })
-            })
-        } catch(err) {
-            reject(false)
+    await prisma.profile.updateMany({
+        where: { userId: user.id },
+        data: {
+            balance: parseFloat(profile.balance) + inBank,
+            inBank: 0
         }
-    })
-}
+    });
+    return true;
+};
 
-const bankWithdrawAll = (user) => {
-    return new Promise((resolve, reject) => {
-        try {
-            connection.query(`SELECT balance, in_bank
-            FROM profiles
-            WHERE user_id = '${user.id}'`, function(err, result) {
-                if(err) throw err;
-
-                const { balance, in_bank } = result[0];
-                if(in_bank <= 0) return reject(false);
-
-                const newBalance = parseFloat(balance) + parseFloat(in_bank);
-                connection.query(`UPDATE profiles
-                SET balance = ${newBalance}, in_bank = 0
-                WHERE user_id = '${user.id}'`, function(err, result) {
-                    if(err) throw err;
-                    resolve(true);
-                })
-            })
-        } catch(err) {
-            reject(false)
-        }
-    })
-}
-
-const bankWallet = (user) => {
-    return new Promise((resolve, reject) => {
-        try {
-            connection.query(`SELECT crytpocurrencies
-            FROM profiles
-            WHERE user_id = '${user.id}'`, function(err, result) {
-                if(err) throw err;
-                resolve(result[0]);
-            })
-        } catch(err) {
-            reject(false)
-        }
-    })
-}
+const bankWallet = async (user) => {
+    const profile = await prisma.profile.findFirst({
+        where: { userId: user.id },
+        select: { cryptocurrencies: true }
+    });
+    return profile;
+};
 
 const bankCreditCard = async (user) => {
     const profile = await Profiles.getProfile(user);
-    
-    if(profile.credit_card === 5) {
-        const card = cardMapping[profile.credit_card];
-        return {
-            current_card: card,
-            next_card: null
-        }
-    } else {
-        const card = cardMapping[profile.credit_card];
-        const nextCard = cardMapping[profile.credit_card + 1];
-        return {
-            current_card: card,
-            next_card: nextCard
-        }
+
+    if (profile.creditCard === 5) {
+        return { current_card: cardMapping[profile.creditCard], next_card: null };
     }
-}
+    return {
+        current_card: cardMapping[profile.creditCard],
+        next_card: cardMapping[profile.creditCard + 1]
+    };
+};
 
 const bankMonthAmount = async (user) => {
-    return new Promise((resolve, reject) => {
-        connection.query(`SELECT SUM(amount) AS total_amount
-            FROM transactions
-        WHERE transaction_type = 0
-        AND created_at >= DATE_FORMAT(NOW(), '%Y-%m-01')
-        AND user_id = ?`, [user.id], function(err, result) {
-            console.log(result)
-            if(err) throw err;
-            resolve(result[0]);
-        })
+    const now = new Date();
+    const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const result = await prisma.transaction.aggregate({
+        where: {
+            userId: user.id,
+            transactionType: 0,
+            createdAt: { gte: firstDayOfMonth }
+        },
+        _sum: { amount: true }
     });
-}
+
+    return { total_amount: result._sum.amount || 0 };
+};
 
 const Bank = {
     bankTransfert,
@@ -293,6 +168,6 @@ const Bank = {
     bankWallet,
     bankCreditCard,
     bankMonthAmount
-}
+};
 
-module.exports = Bank
+module.exports = Bank;

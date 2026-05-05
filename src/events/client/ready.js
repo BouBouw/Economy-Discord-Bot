@@ -4,7 +4,7 @@ const Group = require('../../../handlers/functions/Games/Groups/Group');
 module.exports = {
 	name: 'ready',
 	once: false,
-execute: async (client, connection) => {    
+execute: async (client) => {    
     console.log('[API] '.bold.green + `Connected to Discord.`.bold.white)
 
     client.user.setPresence({

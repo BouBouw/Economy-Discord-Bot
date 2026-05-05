@@ -1,130 +1,88 @@
-const { connection } = require("../../..");
-const Profiles = require("../Profiles");
+const prisma = require('../../database');
+const Profiles = require('../Profiles');
 
 const buyToken = async (user, amount) => {
     const profile = await Profiles.getProfile(user);
     const marketData = await Cryptocurrencies.getMarketData();
 
-    const crypto_amount = parseFloat((amount / marketData.current_price).toFixed(2));
+    const crypto_amount = parseFloat((amount / parseFloat(marketData.currentPrice)).toFixed(2));
+    const balance = parseFloat(profile.balance);
 
-    const balance = profile.balance;
-
-    console.log(amount)
-
-    if (Number(balance) < Number(amount)) {
+    if (balance < Number(amount)) {
         throw new Error("Vous n'avez pas assez d'argent pour acheter cette quantité de tokens.");
     }
 
     const newBalance = balance - amount;
-    const newTokens = profile.cryptocurrencies + crypto_amount;
+    const newTokens = parseFloat(profile.cryptocurrencies) + crypto_amount;
+    const new_price = parseFloat(marketData.currentPrice) * (1 + 0.05 + (1 - parseFloat(marketData.remainingSupply) / parseFloat(marketData.totalSupply)) * 0.1);
+    const remaining_supply = parseFloat(marketData.remainingSupply) - crypto_amount;
 
-    connection.query('UPDATE profiles SET balance = ?, cryptocurrencies = ? WHERE user_id = ?', [newBalance, newTokens, user.id], (err) => {
-        if (err) {
-            throw new Error("Erreur lors de l'achat de tokens.");
-        }
-    });
+    await prisma.$transaction([
+        prisma.profile.updateMany({
+            where: { userId: user.id },
+            data: { balance: newBalance, cryptocurrencies: newTokens }
+        }),
+        prisma.market.update({
+            where: { id: marketData.id },
+            data: { currentPrice: new_price, remainingSupply: remaining_supply, updatedAt: new Date() }
+        }),
+        prisma.transaction.create({
+            data: { userId: user.id, transactionType: 2, amount, cryptocurrencie: crypto_amount, reason: 'Achat Crypto-Monnaie' }
+        })
+    ]);
 
-    const new_price = (Number(marketData.current_price) * (1 + 0.05 + (1 - Number(marketData.remaining_supply) / Number(marketData.total_supply)) * 0.1));
-    const remaining_supply = (Number(marketData.remaining_supply) - Number(crypto_amount));
-    connection.query(`UPDATE market SET current_price = ?, remaining_supply = ?, updated_at = ? WHERE id = ?`, [new_price, remaining_supply, new Date(), 1], (err) => {
-        if(err) {
-            console.log(err)
-            throw new Error("Erreur lors de la mise à jour du marché.");
-        }
-    })
-
-    connection.query(`INSERT INTO transactions (user_id, transaction_type, amount, cryptocurrencie, reason) VALUES (?, ?, ?, ?)`, [user.id, 2, amount, crypto_amount, 'Achat Crypto-Monnaie'], (err) => {
-        if(err) {
-            throw new Error("Erreur lors de la mise à jour des transactions.");
-        }
-    })
-
-    return {
-        newBalance,
-        newTokens
-    };
-}
+    return { newBalance, newTokens };
+};
 
 const sellToken = async (user, amount) => {
     const profile = await Profiles.getProfile(user);
     const marketData = await Cryptocurrencies.getMarketData();
 
     const cryptoAmount = parseFloat(amount);
-
-    if (profile.cryptocurrencies < cryptoAmount) {
+    if (parseFloat(profile.cryptocurrencies) < cryptoAmount) {
         throw new Error("Vous n'avez pas assez de tokens à vendre.");
     }
 
-    const amountInEuros = parseFloat((cryptoAmount * marketData.current_price).toFixed(2));
+    const amountInEuros = parseFloat((cryptoAmount * parseFloat(marketData.currentPrice)).toFixed(2));
+    const newBalance = parseFloat(profile.balance) + amountInEuros;
+    const newTokens = parseFloat(profile.cryptocurrencies) - cryptoAmount;
+    const newPrice = parseFloat(marketData.currentPrice) * (1 - 0.05 - (1 - parseFloat(marketData.remainingSupply) / parseFloat(marketData.totalSupply)) * 0.1);
+    const remainingSupply = parseFloat(marketData.remainingSupply) + cryptoAmount;
 
-    const newBalance = profile.balance + amountInEuros;
-    const newTokens = profile.cryptocurrencies - cryptoAmount;
+    await prisma.$transaction([
+        prisma.profile.updateMany({
+            where: { userId: user.id },
+            data: { balance: newBalance, cryptocurrencies: newTokens }
+        }),
+        prisma.market.update({
+            where: { id: marketData.id },
+            data: { currentPrice: newPrice, remainingSupply, updatedAt: new Date() }
+        }),
+        prisma.transaction.create({
+            data: { userId: user.id, transactionType: 2, amount: amountInEuros, cryptocurrencie: cryptoAmount, reason: 'Vente Crypto-Monnaie' }
+        })
+    ]);
 
-    connection.query(
-        'UPDATE profiles SET balance = ?, cryptocurrencies = ? WHERE user_id = ?',
-        [newBalance, newTokens, user.id],
-        (err) => {
-            if (err) {
-                throw new Error("Erreur lors de la vente de tokens.");
-            }
-        }
-    );
+    return { newBalance, newTokens, amountInEuros };
+};
 
-    const newPrice = (Number(marketData.current_price) * (1 - 0.05 - (1 - Number(marketData.remaining_supply) / Number(marketData.total_supply)) * 0.1));
-    const remainingSupply = (Number(marketData.remaining_supply) + Number(cryptoAmount));
-
-    connection.query(
-        `UPDATE market SET current_price = ?, remaining_supply = ?, updated_at = ? WHERE id = ?`,
-        [newPrice, remainingSupply, new Date(), 1],
-        (err) => {
-            if (err) {
-                console.error(err);
-                throw new Error("Erreur lors de la mise à jour du marché.");
-            }
-        }
-    );
-
-    connection.query(`INSERT INTO transactions (user_id, transaction_type, amount, cryptocurrencie, reason) VALUES (?, ?, ?, ?)`, [user.id, 2, amountInEuros, cryptoAmount, 'Vente Crypto-Monnaie'], (err) => {
-        if(err) {
-            throw new Error("Erreur lors de la mise à jour des transactions.");
-        }
-    })
-
-    return {
-        newBalance,
-        newTokens,
-        amountInEuros
-    };
-}
-
-const getMarketData = () => {
-    return new Promise((resolve, reject) => {
-        try {
-            connection.query('SELECT * FROM market', function(err, result) {
-                if(err) throw err;
-                resolve(result[0]);
-            })
-        } catch(err) {
-            reject(err);
-        }
-    })
-}
+const getMarketData = async () => {
+    return prisma.market.findFirst();
+};
 
 const calculateTokenPrice = async (user) => {
     const marketData = await getMarketData();
     const profile = await Profiles.getProfile(user);
-
-    const price = profile.cryptocurrencies * marketData.current_price;
-    return price;
-}
+    return parseFloat(profile.cryptocurrencies) * parseFloat(marketData.currentPrice);
+};
 
 const calculateTokenEffect = async (user) => {
     const marketData = await getMarketData();
     const profile = await Profiles.getProfile(user);
 
-    const cryptocurrenciePrice = Number(marketData.cryptocurrencie_price);
-    const currentPrice = Number(marketData.current_price);
-    const cryptocurrencieAmount = Number(profile.cryptocurrencies);
+    const cryptocurrenciePrice = parseFloat(marketData.cryptocurrenciePrice);
+    const currentPrice = parseFloat(marketData.currentPrice);
+    const cryptocurrencieAmount = parseFloat(profile.cryptocurrencies);
 
     if (isNaN(cryptocurrenciePrice) || isNaN(currentPrice) || isNaN(cryptocurrencieAmount)) {
         throw new Error("Les données de marché ou de profil ne sont pas valides.");
@@ -133,22 +91,11 @@ const calculateTokenEffect = async (user) => {
     const currentValue = cryptocurrencieAmount * currentPrice;
     const initialValue = cryptocurrencieAmount * cryptocurrenciePrice;
     const profitOrLoss = currentValue - initialValue;
-    const percentageChange = (profitOrLoss / initialValue) * 100;
+    const percentageChange = initialValue !== 0 ? (profitOrLoss / initialValue) * 100 : 0;
     const isProfit = profitOrLoss > 0;
 
-    return {
-        profitOrLoss, // Profit ou perte en valeur absolue
-        percentageChange, // Pourcentage de gain ou de perte
-        isProfit // true si gain, false si perte
-    };
-}
-
-const Cryptocurrencies = {
-    buyToken,
-    sellToken,
-    getMarketData,
-    calculateTokenPrice,
-    calculateTokenEffect
+    return { profitOrLoss, percentageChange, isProfit };
 };
 
+const Cryptocurrencies = { buyToken, sellToken, getMarketData, calculateTokenPrice, calculateTokenEffect };
 module.exports = Cryptocurrencies;

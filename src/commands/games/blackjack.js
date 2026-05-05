@@ -8,6 +8,7 @@ const {
 } = require('discord.js');
 const BlackjackRenderer = require('../../../handlers/functions/Images/Commands/Blackjack');
 const Utils = require('../../../handlers/functions/Utils');
+const prisma = require('../../../handlers/database');
 
 module.exports = {
     name: 'blackjack',
@@ -21,7 +22,7 @@ module.exports = {
             required: true,
         }
     ],
-    execute: (client, interaction, args, con) => {
+    execute: async (client, interaction, args) => {
         const amountInput = interaction.options.getString('montant');
         const bet = Utils.parseAmountInput(amountInput);
 
@@ -59,17 +60,14 @@ module.exports = {
         };
 
         // Vérification du profil
-        con.query(`SELECT balance FROM profiles WHERE user_id = ?`, [interaction.user.id], (err, result) => {
-            if (err) {
-                console.error('Erreur SQL:', err);
-                return interaction.reply({ content: "Erreur de base de données", ephemeral: true });
-            }
+        const _profile = await prisma.profile.findFirst({ where: { userId: interaction.user.id } });
+        if (!_profile) return interaction.reply({ content: "Erreur de base de données", ephemeral: true });
+        const userCoins = parseFloat(_profile.balance);
+        if (bet > userCoins) {
+            return interaction.reply({ content: "Fonds insuffisants", ephemeral: true });
+        }
 
-            const userCoins = parseFloat(result[0].balance);
-            if (bet > userCoins) {
-                return interaction.reply({ content: "Fonds insuffisants", ephemeral: true });
-            }
-
+        {
             // Initialisation du jeu
             let deck = [];
             for (let i = 0; i < 6; i++) deck = deck.concat(createDeck());
@@ -189,13 +187,10 @@ module.exports = {
                         if (gameOver) {
                             // Mise à jour de la base de données
                             const newCoins = (userCoins + winnings).toFixed(2);
-                            con.query(
-                                `UPDATE profiles SET balance = ? WHERE user_id = ?`, 
-                                [newCoins, interaction.user.id],
-                                (err) => {
-                                    if (err) console.error('Erreur SQL:', err);
-                                }
-                            );
+                            await prisma.profile.updateMany({
+                                where: { userId: interaction.user.id },
+                                data: { balance: parseFloat(newCoins) }
+                            });
                     
                             collector.stop();
                             await i.editReply({
@@ -217,6 +212,6 @@ module.exports = {
                     });
                 });
             });
-        });
+        }
     }
 };

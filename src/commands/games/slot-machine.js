@@ -8,6 +8,7 @@ const {
 } = require('discord.js');
 const SlotMachineRenderer = require('../../../handlers/functions/Images/Commands/SlotMachine');
 const Utils = require('../../../handlers/functions/Utils');
+const prisma = require('../../../handlers/database');
 
 module.exports = {
     name: 'slot-machine',
@@ -21,7 +22,7 @@ module.exports = {
             required: true,
         }
     ],
-    execute: (client, interaction, args, con) => {
+    execute: async (client, interaction, args) => {
         const amountInput = interaction.options.getString('montant');
         const bet = Utils.parseAmountInput(amountInput);
 
@@ -30,17 +31,14 @@ module.exports = {
         const ANIMATION_FRAMES = 10;
         const ANIMATION_DELAY = 100;
 
-        con.query(`SELECT balance FROM profiles WHERE user_id = ?`, [interaction.user.id], (err, result) => {
-            if (err) {
-                console.error('Erreur SQL:', err);
-                return interaction.reply({ content: "Erreur de base de données", ephemeral: true });
-            }
+        const _profile = await prisma.profile.findFirst({ where: { userId: interaction.user.id } });
+        if (!_profile) return interaction.reply({ content: "Erreur de base de données", ephemeral: true });
+        const userCoins = parseFloat(_profile.balance);
+        if (bet > userCoins) {
+            return interaction.reply({ content: "Fonds insuffisants", ephemeral: true });
+        }
 
-            const userCoins = parseFloat(result[0].balance);
-            if (bet > userCoins) {
-                return interaction.reply({ content: "Fonds insuffisants", ephemeral: true });
-            }
-
+        {
             const spinButton = new ButtonBuilder()
                 .setCustomId('spin')
                 .setLabel('Tourner la machine')
@@ -49,96 +47,86 @@ module.exports = {
 
             const actionRow = new ActionRowBuilder().addComponents(spinButton);
 
-            SlotMachineRenderer(interaction, {
-                reels: [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
-                bet,
-                symbols: SYMBOLS
-            }).then(initialRender => {
-                const initialAttachment = new AttachmentBuilder(initialRender.toBuffer(), { name: 'slot.png' });
+            let initialRender;
+            try {
+                initialRender = await SlotMachineRenderer(interaction, {
+                    reels: [[0, 0, 0], [0, 0, 0], [0, 0, 0]], bet, symbols: SYMBOLS
+                });
+            } catch (error) {
+                console.error('Erreur de rendu:', error);
+                return interaction.reply({ content: "Erreur lors du rendu de la machine à sous", ephemeral: true });
+            }
 
-                interaction.reply({ 
-                    content: `**MACHINE À SOUS** - Mise: **${Utils.formatMoney(Number(bet))} €**`,
-                    files: [initialAttachment],
-                    components: [actionRow]
-                }).then(message => {
-                    const collector = message.createMessageComponentCollector({ time: 60000 });
+            const initialAttachment = new AttachmentBuilder(initialRender.toBuffer(), { name: 'slot.png' });
+            const message = await interaction.reply({ 
+                content: `**MACHINE À SOUS** - Mise: **${Utils.formatMoney(Number(bet))} €**`,
+                files: [initialAttachment],
+                components: [actionRow]
+            });
 
-                    collector.on('collect', i => {
-                        if (i.user.id !== interaction.user.id) {
-                            return i.reply({ content: "Ce n'est pas votre partie!", ephemeral: true });
+            const collector = message.createMessageComponentCollector({ time: 60000 });
+
+            collector.on('collect', async i => {
+                if (i.user.id !== interaction.user.id) {
+                    return i.reply({ content: "Ce n'est pas votre partie!", ephemeral: true });
+                }
+
+                spinButton.setDisabled(true);
+                await i.update({ components: [new ActionRowBuilder().addComponents(spinButton)] });
+
+                const newBalance = (userCoins - bet).toFixed(2);
+                await prisma.profile.updateMany({
+                    where: { userId: interaction.user.id },
+                    data: { balance: parseFloat(newBalance) }
+                });
+
+                const animateSpin = async (frame) => {
+                    if (frame >= ANIMATION_FRAMES) {
+                        const finalReels = generateReels();
+                        const winAmount = calculateWin(finalReels, bet);
+
+                        const finalRender = await SlotMachineRenderer(interaction, {
+                            reels: finalReels, bet, winAmount, symbols: SYMBOLS
+                        });
+                        const finalAttachment = new AttachmentBuilder(finalRender.toBuffer(), { name: 'slot.png' });
+                        
+                        if (winAmount > 0) {
+                            const updatedBalance = (parseFloat(newBalance) + winAmount).toFixed(2);
+                            await prisma.profile.updateMany({
+                                where: { userId: interaction.user.id },
+                                data: { balance: parseFloat(updatedBalance) }
+                            });
                         }
 
-                        spinButton.setDisabled(true);
-                        i.update({
-                            components: [new ActionRowBuilder().addComponents(spinButton)]
-                        }).then(() => {
-                            const newBalance = (userCoins - bet).toFixed(2);
-                            con.query(`UPDATE profiles SET balance = ? WHERE user_id = ?`, [newBalance, interaction.user.id]);
+                        const resultMessage = winAmount > 0 
+                            ? `**GAGNÉ!** +**${Utils.formatMoney(Number(winAmount))} €** (x${winAmount / bet})`
+                            : "**Perdu...** Essayez encore!";
 
-                            const animateSpin = (frame) => {
-                                if (frame >= ANIMATION_FRAMES) {
-                                    const finalReels = generateReels();
-                                    const winAmount = calculateWin(finalReels, bet);
+                        collector.stop();
+                        message.edit({
+                            content: `${resultMessage}\nMise: **${Utils.formatMoney(Number(bet))} €**`,
+                            files: [finalAttachment],
+                            components: []
+                        }).catch(console.error);
+                        return;
+                    }
 
-                                    SlotMachineRenderer(interaction, {
-                                        reels: finalReels,
-                                        bet,
-                                        winAmount,
-                                        symbols: SYMBOLS
-                                    }).then(finalRender => {
-                                        const finalAttachment = new AttachmentBuilder(finalRender.toBuffer(), { name: 'slot.png' });
-                                        
-                                        if (winAmount > 0) {
-                                            const updatedBalance = (parseFloat(newBalance) + winAmount).toFixed(2);
-                                            con.query(`UPDATE profiles SET balance = ? WHERE user_id = ?`, [updatedBalance, interaction.user.id]);
-                                        }
-
-                                        const resultMessage = winAmount > 0 
-                                            ? `**GAGNÉ!** +**${Utils.formatMoney(Number(winAmount))} €** (x${winAmount / bet})`
-                                            : "**Perdu...** Essayez encore!";
-
-                                        collector.stop();
-                                        message.edit({
-                                            content: `${resultMessage}\nMise: **${Utils.formatMoney(Number(bet))} €**`,
-                                            files: [finalAttachment],
-                                            components: []
-                                        }).catch(console.error);
-                                    });
-                                    return;
-                                }
-
-                                const spinningReels = generateReels();
-                                SlotMachineRenderer(interaction, {
-                                    reels: spinningReels,
-                                    spinning: true,
-                                    bet,
-                                    symbols: SYMBOLS
-                                }).then(spinningRender => {
-                                    const spinningAttachment = new AttachmentBuilder(spinningRender.toBuffer(), { name: 'slot.png' });
-                                    
-                                    message.edit({
-                                        files: [spinningAttachment]
-                                    }).then(() => {
-                                        setTimeout(() => {
-                                            animateSpin(frame + 1);
-                                        }, ANIMATION_DELAY + frame * 50);
-                                    });
-                                });
-                            };
-
-                            animateSpin(0);
-                        });
+                    const spinningReels = generateReels();
+                    const spinningRender = await SlotMachineRenderer(interaction, {
+                        reels: spinningReels, spinning: true, bet, symbols: SYMBOLS
                     });
+                    const spinningAttachment = new AttachmentBuilder(spinningRender.toBuffer(), { name: 'slot.png' });
+                    await message.edit({ files: [spinningAttachment] });
+                    setTimeout(() => animateSpin(frame + 1), ANIMATION_DELAY + frame * 50);
+                };
 
-                    collector.on('end', () => {
-                        message.edit({ components: [] }).catch(console.error);
-                    });
-                });
-            }).catch(error => {
-                console.error('Erreur de rendu:', error);
-                interaction.reply({ content: "Erreur lors du rendu de la machine à sous", ephemeral: true });
+                animateSpin(0);
             });
-        });
+
+            collector.on('end', () => {
+                message.edit({ components: [] }).catch(console.error);
+            });
+        }
 
         function randomSymbol() {
             return Math.floor(Math.random() * 8);

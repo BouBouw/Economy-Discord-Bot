@@ -1,0 +1,152 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Profile {
+  id               Int       @id @default(autoincrement())
+  premiumType      Int       @default(0) @map("premium_type")
+  language         String    @default("FR_fr")
+  userId           String    @map("user_id")
+  displayName      String?   @map("display_name")
+  backgroundUrl    String?   @map("background_url")
+  experiences      Int       @default(0)
+  level            Int       @default(1)
+  balance          Decimal   @default(0) @db.Decimal(10, 2)
+  inBank           Decimal   @default(150) @map("in_bank") @db.Decimal(10, 2)
+  cryptocurrencies Decimal   @default(0) @db.Decimal(16, 9)
+  creditCard       Int       @default(0) @map("credit_card")
+  reputations      Int       @default(0)
+  boostInt         Int       @default(0) @map("boost_int")
+  boostDuration    DateTime? @map("boost_duration")
+  jobs             Int?
+
+  @@map("profiles")
+}
+
+model Job {
+  id             Int      @id @default(autoincrement())
+  userId         String   @map("user_id")
+  jobType        Int?     @map("job_type")
+  experiences    Int      @default(0)
+  level          Int      @default(0)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Date
+  dailyTimestamp DateTime @default(now()) @map("daily_timestamp")
+
+  @@map("jobs")
+}
+
+model Market {
+  id                   Int      @id @default(autoincrement())
+  cryptocurrenciePrice Decimal  @default(10) @map("cryptocurrencie_price") @db.Decimal(10, 2)
+  currentPrice         Decimal  @default(10) @map("current_price") @db.Decimal(10, 2)
+  totalSupply          Decimal  @default(1000000) @map("total_supply") @db.Decimal(15, 2)
+  remainingSupply      Decimal  @default(1000000) @map("remaining_supply") @db.Decimal(15, 2)
+  updatedAt            DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("market")
+}
+
+model MessageSent {
+  id           Int      @id @default(autoincrement())
+  userId       String   @map("user_id")
+  guildId      String   @map("guild_id")
+  channelId    String   @map("channel_id")
+  messageCount Int      @default(0) @map("message_count")
+  lastUpdate   DateTime @default(now()) @updatedAt @map("last_update")
+
+  @@unique([userId, guildId, channelId], name: "unique_user_guild_channel")
+  @@map("message_sent")
+}
+
+model Transaction {
+  id              Int      @id @default(autoincrement())
+  userId          String   @map("user_id")
+  transactionType Int?     @map("transaction_type")
+  amount          Decimal  @default(0) @db.Decimal(10, 2)
+  cryptocurrencie Decimal  @default(0) @db.Decimal(10, 2)
+  reason          String?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@map("transactions")
+}
+
+model VoiceTime {
+  id        Int      @id @default(autoincrement())
+  userId    String   @map("user_id")
+  guildId   String   @map("guild_id")
+  channelId String   @map("channel_id")
+  timeSpent Int      @map("time_spent")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("voice_time")
+}
+
+model BlockchainBlock {
+  id           Int                    @id @default(autoincrement())
+  hash         String                 @unique
+  previousHash String                 @map("previous_hash")
+  timestamp    DateTime
+  nonce        Int
+  transactions BlockchainTransaction[]
+
+  @@map("blockchain_blocks")
+}
+
+model BlockchainTransaction {
+  id        Int             @id @default(autoincrement())
+  blockHash String          @map("block_hash")
+  fromUser  String          @map("from_user")
+  toUser    String          @map("to_user")
+  amount    Decimal         @db.Decimal(10, 2)
+  type      String
+  timestamp DateTime
+  block     BlockchainBlock @relation(fields: [blockHash], references: [hash])
+
+  @@map("blockchain_transactions")
+}
+
+model CryptoHistory {
+  id        Int      @id @default(autoincrement())
+  price     Decimal  @db.Decimal(10, 6)
+  timestamp DateTime @default(now())
+
+  @@map("crypto_history")
+}
+
+model Group {
+  id            Int      @id @default(autoincrement())
+  uuid          String   @unique
+  ownerId       String   @map("owner_id")
+  groupPlayers  String   @map("group_players")
+  status        String   @default("pending")
+  invitedPlayer String?  @map("invited_player")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@map("groups")
+}
+
+model GameHosted {
+  id        Int          @id @default(autoincrement())
+  uuid      String       @unique
+  hostId    String       @map("hostID")
+  gameType  Int          @map("gameType")
+  gameMode  Int          @map("gameMode")
+  createdAt DateTime     @default(now()) @map("createdAt")
+  players   GamePlayer[]
+
+  @@map("games_hosted")
+}
+
+model GamePlayer {
+  id       Int        @id @default(autoincrement())
+  gameUuid String     @map("game_uuid")
+  userId   String     @map("userID")
+  joinedAt DateTime   @default(now()) @map("joinedAt")
+  game     GameHosted @relation(fields: [gameUuid], references: [uuid])
+
+  @@map("game_players")
+}

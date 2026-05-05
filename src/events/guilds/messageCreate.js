@@ -3,7 +3,7 @@ const MessageStats = require("../../../handlers/functions/Statistics/MessageStat
 module.exports = {
 	name: 'messageCreate',
 	once: false,
-execute: async (message, client, con) => {
+execute: async (message, client) => {
     if(message.author.bot) return;
 
     await MessageStats.MessageUpdate(message);

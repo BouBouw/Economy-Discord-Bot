@@ -1,54 +1,42 @@
-const { connection } = require("../../..");
+const prisma = require('../../database');
 
 async function getEconomyLead(sortBy = 'economy', page = 1, limit = 10) {
-    return new Promise((resolve, reject) => {
-        try {
-            const offset = (page - 1) * limit;
+    const offset = (page - 1) * limit;
 
-            let orderBy;
-            switch (sortBy) {
-                case 'economy':
-                    orderBy = '(balance + in_bank + cryptocurrencies) DESC';
-                    break;
-                case 'experience':
-                    orderBy = 'experience DESC';
-                    break;
-                case 'level':
-                    orderBy = 'level DESC';
-                    break;
-                default:
-                    orderBy = '(balance + in_bank + cryptocurrencies) DESC';
-            }
+    let orderBy;
+    switch (sortBy) {
+        case 'economy':
+            orderBy = [{ balance: 'desc' }, { inBank: 'desc' }];
+            break;
+        case 'experience':
+            orderBy = [{ experiences: 'desc' }];
+            break;
+        case 'level':
+            orderBy = [{ level: 'desc' }];
+            break;
+        default:
+            orderBy = [{ balance: 'desc' }, { inBank: 'desc' }];
+    }
 
-            const query = `
-                SELECT 
-                    user_id, 
-                    balance, 
-                    in_bank, 
-                    cryptocurrencies, 
-                    experiences, 
-                    level,
-                    (balance + in_bank + cryptocurrencies) AS total_economy
-                FROM profiles
-                ORDER BY ${orderBy}
-                LIMIT ? OFFSET ?;
-            `;
-
-            connection.query(query, [limit, offset], function (err, result) {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve(result);
-                }
-            });
-        } catch (err) {
-            reject(err);
-        }
+    const profiles = await prisma.profile.findMany({
+        select: {
+            userId: true,
+            balance: true,
+            inBank: true,
+            cryptocurrencies: true,
+            experiences: true,
+            level: true
+        },
+        orderBy,
+        take: limit,
+        skip: offset
     });
+
+    return profiles.map(p => ({
+        ...p,
+        total_economy: parseFloat(p.balance) + parseFloat(p.inBank) + parseFloat(p.cryptocurrencies)
+    }));
 }
 
-const Leaderboards = {
-    getEconomyLead
-}
-
+const Leaderboards = { getEconomyLead };
 module.exports = Leaderboards;

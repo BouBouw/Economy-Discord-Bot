@@ -8,6 +8,7 @@ const {
 } = require('discord.js');
 const RouletteRenderer = require('../../../handlers/functions/Images/Commands/Roulette');
 const Utils = require('../../../handlers/functions/Utils');
+const prisma = require('../../../handlers/database');
 
 module.exports = {
     name: 'roulette',
@@ -38,28 +39,21 @@ module.exports = {
             ]
         }
     ],
-    execute: (client, interaction, args, con) => {
+    execute: async (client, interaction, args) => {
         const amountInput = interaction.options.getString('montant');
         const betType = interaction.options.getString('type');
         const bet = Utils.parseAmountInput(amountInput);
         const ANIMATION_FRAMES = 15;
         const ANIMATION_DELAY = 100;
 
-        con.query(`SELECT balance FROM profiles WHERE user_id = ?`, [interaction.user.id], (err, result) => {
-            if (err) {
-                console.error('Erreur SQL:', err);
-                return interaction.reply({ content: "Erreur de base de données", ephemeral: true });
-            }
+        const _profile = await prisma.profile.findFirst({ where: { userId: interaction.user.id } });
+        if (!_profile) return interaction.reply({ content: "Profil non trouvé", ephemeral: true });
+        const userCoins = parseFloat(_profile.balance);
+        if (bet > userCoins) {
+            return interaction.reply({ content: "Fonds insuffisants", ephemeral: true });
+        }
 
-            if (result.length === 0) {
-                return interaction.reply({ content: "Profil non trouvé", ephemeral: true });
-            }
-
-            const userCoins = parseFloat(result[0].balance);
-            if (bet > userCoins) {
-                return interaction.reply({ content: "Fonds insuffisants", ephemeral: true });
-            }
-
+        {
             const spinButton = new ButtonBuilder()
                 .setCustomId('spin')
                 .setLabel('Faire tourner la roue')
@@ -68,96 +62,85 @@ module.exports = {
 
             const actionRow = new ActionRowBuilder().addComponents(spinButton);
 
-            RouletteRenderer(interaction, {
-                bet,
-                bets: [{ type: betType, amount: bet }],
-                spinning: false
-            }).then(initialRender => {
-                const initialAttachment = new AttachmentBuilder(initialRender.toBuffer(), { name: 'roulette.png' });
+            let initialRender;
+            try {
+                initialRender = await RouletteRenderer(interaction, { bet, bets: [{ type: betType, amount: bet }], spinning: false });
+            } catch (error) {
+                console.error('Erreur de rendu:', error);
+                return interaction.reply({ content: "Erreur lors du rendu de la roulette", ephemeral: true });
+            }
 
-                interaction.reply({ 
-                    content: `**ROULETTE** - Mise: **${Utils.formatMoney(Number(bet))} €** sur ${betType}`,
-                    files: [initialAttachment],
-                    components: [actionRow]
-                }).then(message => {
-                    const collector = message.createMessageComponentCollector({ time: 60000 });
+            const initialAttachment = new AttachmentBuilder(initialRender.toBuffer(), { name: 'roulette.png' });
+            const message = await interaction.reply({ 
+                content: `**ROULETTE** - Mise: **${Utils.formatMoney(Number(bet))} €** sur ${betType}`,
+                files: [initialAttachment],
+                components: [actionRow]
+            });
 
-                    collector.on('collect', i => {
-                        if (i.user.id !== interaction.user.id) {
-                            return i.reply({ content: "Ce n'est pas votre partie!", ephemeral: true });
+            const collector = message.createMessageComponentCollector({ time: 60000 });
+
+            collector.on('collect', async i => {
+                if (i.user.id !== interaction.user.id) {
+                    return i.reply({ content: "Ce n'est pas votre partie!", ephemeral: true });
+                }
+
+                spinButton.setDisabled(true);
+                await i.update({ components: [new ActionRowBuilder().addComponents(spinButton)] });
+
+                const newBalance = (userCoins - bet).toFixed(2);
+                await prisma.profile.updateMany({
+                    where: { userId: interaction.user.id },
+                    data: { balance: parseFloat(newBalance) }
+                });
+
+                const animateSpin = async (frame) => {
+                    if (frame >= ANIMATION_FRAMES) {
+                        const winningNumber = Math.floor(Math.random() * 37);
+                        const isWin = checkWin(betType, winningNumber);
+                        const winAmount = isWin ? calculateWin(betType, bet) : 0;
+
+                        const finalRender = await RouletteRenderer(interaction, {
+                            bet, winAmount, winningNumber, spinning: false,
+                            bets: [{ type: betType, amount: bet }]
+                        });
+                        const finalAttachment = new AttachmentBuilder(finalRender.toBuffer(), { name: 'roulette.png' });
+                        
+                        if (isWin) {
+                            const updatedBalance = (parseFloat(newBalance) + winAmount).toFixed(2);
+                            await prisma.profile.updateMany({
+                                where: { userId: interaction.user.id },
+                                data: { balance: parseFloat(updatedBalance) }
+                            });
                         }
 
-                        spinButton.setDisabled(true);
-                        i.update({
-                            components: [new ActionRowBuilder().addComponents(spinButton)]
-                        }).then(() => {
-                            const newBalance = (userCoins - bet).toFixed(2);
-                            con.query(`UPDATE profiles SET balance = ? WHERE user_id = ?`, [newBalance, interaction.user.id]);
+                        const resultMessage = isWin 
+                            ? `**GAGNÉ!** Le numéro ${winningNumber} est sorti. Vous gagnez **${Utils.formatMoney(Number(winAmount))} €**`
+                            : `**PERDU...** Le numéro ${winningNumber} est sorti.`;
 
-                            const animateSpin = (frame) => {
-                                if (frame >= ANIMATION_FRAMES) {
-                                    const winningNumber = Math.floor(Math.random() * 37); // 0-36
-                                    const isWin = checkWin(betType, winningNumber);
-                                    const winAmount = isWin ? calculateWin(betType, bet) : 0;
+                        collector.stop();
+                        message.edit({
+                            content: `${resultMessage}\nMise: **${Utils.formatMoney(Number(bet))} €**`,
+                            files: [finalAttachment],
+                            components: []
+                        }).catch(console.error);
+                        return;
+                    }
 
-                                    RouletteRenderer(interaction, {
-                                        bet,
-                                        winAmount,
-                                        winningNumber,
-                                        spinning: false,
-                                        bets: [{ type: betType, amount: bet }]
-                                    }).then(finalRender => {
-                                        const finalAttachment = new AttachmentBuilder(finalRender.toBuffer(), { name: 'roulette.png' });
-                                        
-                                        if (isWin) {
-                                            const updatedBalance = (parseFloat(newBalance) + winAmount).toFixed(2);
-                                            con.query(`UPDATE profiles SET balance = ? WHERE user_id = ?`, [updatedBalance, interaction.user.id]);
-                                        }
-
-                                        const resultMessage = isWin 
-                                            ? `**GAGNÉ!** Le numéro ${winningNumber} est sorti. Vous gagnez **${Utils.formatMoney(Number(winAmount))} €**`
-                                            : `**PERDU...** Le numéro ${winningNumber} est sorti.`;
-
-                                        collector.stop();
-                                        message.edit({
-                                            content: `${resultMessage}\nMise: **${Utils.formatMoney(Number(bet))} €**`,
-                                            files: [finalAttachment],
-                                            components: []
-                                        }).catch(console.error);
-                                    });
-                                    return;
-                                }
-
-                                RouletteRenderer(interaction, {
-                                    bet,
-                                    spinning: true,
-                                    bets: [{ type: betType, amount: bet }]
-                                }).then(spinningRender => {
-                                    const spinningAttachment = new AttachmentBuilder(spinningRender.toBuffer(), { name: 'roulette.png' });
-                                    
-                                    message.edit({
-                                        files: [spinningAttachment]
-                                    }).then(() => {
-                                        setTimeout(() => {
-                                            animateSpin(frame + 1);
-                                        }, ANIMATION_DELAY);
-                                    });
-                                });
-                            };
-
-                            animateSpin(0);
-                        });
+                    const spinningRender = await RouletteRenderer(interaction, {
+                        bet, spinning: true, bets: [{ type: betType, amount: bet }]
                     });
+                    const spinningAttachment = new AttachmentBuilder(spinningRender.toBuffer(), { name: 'roulette.png' });
+                    await message.edit({ files: [spinningAttachment] });
+                    setTimeout(() => animateSpin(frame + 1), ANIMATION_DELAY);
+                };
 
-                    collector.on('end', () => {
-                        message.edit({ components: [] }).catch(console.error);
-                    });
-                });
-            }).catch(error => {
-                console.error('Erreur de rendu:', error);
-                interaction.reply({ content: "Erreur lors du rendu de la roulette", ephemeral: true });
+                animateSpin(0);
             });
-        });
+
+            collector.on('end', () => {
+                message.edit({ components: [] }).catch(console.error);
+            });
+        }
 
         function checkWin(betType, number) {
             const isRed = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36].includes(number);

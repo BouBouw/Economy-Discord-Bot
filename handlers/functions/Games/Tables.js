@@ -1,5 +1,5 @@
 ﻿const { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, EmbedBuilder, Colors } = require('discord.js');
-const { connection, client } = require('../../../index.js');
+const prisma = require('../../database');
 const Group = require('./Groups/Group.js');
 const playTicTacToe = require('./Game/TicTacToe.js');
 const { createGameTable } = require('./Frame.js');
@@ -45,7 +45,7 @@ class GameManager {
     static async notifyPlayers(gameHost, gameTable, guild) {
         const notifications = gameTable.map(async (user) => {
             try {
-                const member = await guild.members.fetch(user.userID);
+                const member = await guild.members.fetch(user.userId);
                 if (!member) return;
                 
                 await member.send({
@@ -59,13 +59,13 @@ class GameManager {
                             },
                             {
                                 name: `Joueurs :`,
-                                value: gameTable.map(entry => `<@${entry.userID}>`).join(', ') || 'Aucun adversaire pour le moment.'
+                                value: gameTable.map(entry => `<@${entry.userId}>`).join(', ') || 'Aucun adversaire pour le moment.'
                             }
                         ]
                     }]
                 });
             } catch (err) {
-                console.error(`Erreur lors de l'envoi du message à ${user.userID}:`, err);
+                console.error(`Erreur lors de l'envoi du message à ${user.userId}:`, err);
             }
         });
 
@@ -122,39 +122,10 @@ class GameManager {
         }
     }
 
-    static async createDatabaseTables(uuid, userID, gameType, gameMode, membersToAdd) {
-        const promiseConnection = connection.promise();
-        
-        try {
-            await promiseConnection.beginTransaction();
-
-            // Insertion dans games_hosted
-            await promiseConnection.query(
-                `INSERT INTO games_hosted (uuid, hostID, gameType, gameMode) VALUES (?, ?, ?, ?)`,
-                [uuid, userID, gameType, gameMode]
-            );
-
-            // Création de la table de jeu
-            await promiseConnection.query(
-                `CREATE TABLE games_${uuid.toLowerCase()} (
-                    id INT AUTO_INCREMENT PRIMARY KEY, 
-                    userID VARCHAR(255), 
-                    joinedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )`
-            );
-
-            // Ajout du host et des membres
-            const values = [[userID], ...membersToAdd.map(id => [id])];
-            await promiseConnection.query(
-                `INSERT INTO games_${uuid.toLowerCase()} (userID) VALUES ?`,
-                [values]
-            );
-
-            await promiseConnection.commit();
-        } catch (error) {
-            await promiseConnection.rollback();
-            throw error;
-        }
+            static async createDatabaseTables(uuid, userID, gameType, gameMode, membersToAdd) {
+        await prisma.gameHosted.create({
+            data: { uuid, hostId: userID, gameType, gameMode, players: { create: [{ userId: userID }, ...membersToAdd.map(id => ({ userId: id }))] } }
+        });
     }
 
     static async addMembersToThread(thread, membersToAdd, gameType) {
@@ -291,7 +262,7 @@ class GameManager {
         } else {
             embed.setDescription(
                 pageData.map((entry, index) => 
-                    `\`#${start + index + 1}\` <@${entry.hostID}>
+                    `\`#${start + index + 1}\` <@${entry.hostId}>
                     Crée le: <t:${Math.floor(entry.createdAt / 1000)}:f>
                     **Jeu:** ${GAME_CONFIG.games[entry.gameType]}
                     **Mode:** ${GAME_CONFIG.modes[entry.gameMode]} joueurs`
@@ -305,20 +276,9 @@ class GameManager {
         };
     }
 
-    static async fetchGames(filters) {
-        const promiseConnection = connection.promise();
-        try {
-            let query = "SELECT * FROM games_hosted ORDER BY createdAt DESC";
-            if (filters.size > 0) {
-                const filterValues = Array.from(filters).map(f => `'${f}'`).join(", ");
-                query = `SELECT * FROM games_hosted WHERE gameType IN (${filterValues}) ORDER BY createdAt DESC`;
-            }
-            const [rows] = await promiseConnection.query(query);
-            return rows;
-        } catch (error) {
-            console.error('Error in fetchGames:', error);
-            throw error;
-        }
+            static async fetchGames(filters) {
+        const where = filters.size > 0 ? { gameType: { in: Array.from(filters).map(Number) } } : {};
+        return prisma.gameHosted.findMany({ where, orderBy: { createdAt: 'desc' } });
     }
 
     static generateComponents(totalPages, currentPage, pageData, filters) {
@@ -389,14 +349,14 @@ class GameManager {
             const maxPlayers = GAME_CONFIG.modes[gameHost.gameMode];
 
             // Vérifications
-            if (interaction.user.id === gameHost.hostID) {
+            if (interaction.user.id === gameHost.hostId) {
                 return interaction.reply({
                     content: `Vous ne pouvez pas rejoindre la partie car vous êtes l'organisateur.`,
                     ephemeral: true
                 });
             }
             
-            if (gameTable.some(entry => entry.userID === interaction.user.id)) {
+            if (gameTable.some(entry => entry.userId === interaction.user.id)) {
                 return interaction.reply({
                     content: `Vous ne pouvez pas rejoindre la partie car vous êtes déjà dans la partie.`,
                     ephemeral: true
@@ -414,10 +374,7 @@ class GameManager {
             const isInGroup = await this.isUserInGroup(interaction.user.id, gameHost.hostID);
 
             // Ajouter le joueur à la partie
-            await this.queryAsync(
-                `INSERT INTO games_${uuid.toLowerCase()} (userID) VALUES (?)`,
-                [interaction.user.id]
-            );
+            await prisma.gamePlayer.create({ data: { gameUuid: uuid, userId: interaction.user.id } });
 
             const channel = await this.getChannelThread(uuid, interaction.guild);
             const newGameTable = await this.getGameTable(uuid);
@@ -426,7 +383,7 @@ class GameManager {
             await channel.members.add(interaction.user.id);
 
             // Mettre à jour l'affichage
-            await this.updateGameDisplay(channel, gameHost, newGameTable, interaction.guild);
+            await this.updateGameDisplay(channel, gameHost, newGameTable, interaction.guild, interaction.client);
 
             // Répondre à l'utilisateur
             await interaction.reply({
@@ -437,7 +394,7 @@ class GameManager {
             // Si la partie est complète, la démarrer
             if (newGameTable.length === maxPlayers) {
                 const newGameHost = await this.getGameStats(uuid);
-                await this.updateGameDisplay(channel, newGameHost, newGameTable, interaction.guild);
+                await this.updateGameDisplay(channel, newGameHost, newGameTable, interaction.guild, interaction.client);
                 await this.manager(newGameHost, newGameTable, interaction.guild);
             }
         } catch (error) {
@@ -449,22 +406,12 @@ class GameManager {
         }
     }
 
-    static async isUserInGroup(userId, hostId) {
-        const promiseConnection = connection.promise();
-        try {
-            const [results] = await promiseConnection.query(
-                `SELECT group_players FROM groups 
-                 WHERE owner_id = ? AND status = 'active' AND JSON_CONTAINS(group_players, ?)`,
-                [hostId, `"${userId}"`]
-            );
-            return results.length > 0;
-        } catch (error) {
-            console.error('Error in isUserInGroup:', error);
-            throw error;
-        }
+            static async isUserInGroup(userId, hostId) {
+        const group = await prisma.group.findFirst({ where: { ownerId: hostId, status: 'active', groupPlayers: { contains: userId } } });
+        return group !== null;
     }
 
-    static async updateGameDisplay(channel, gameHost, gameTable, guild) {
+    static async updateGameDisplay(channel, gameHost, gameTable, guild, client) {
         try {
             const gameImage = await createGameTable(channel, gameHost, gameTable, guild);
             const messages = await channel.messages.fetch({ limit: 10 });
@@ -503,21 +450,13 @@ class GameManager {
         }
     }
 
-    static async endGameTable(gameHost, gameTable, guild) {
+            static async endGameTable(gameHost, gameTable, guild) {
         try {
             await new Promise(resolve => setTimeout(resolve, 10000));
             const channel = await this.getChannelThread(gameHost.uuid, guild);
-            
             await channel.delete();
-            
-            const promiseConnection = connection.promise();
-            await Promise.all([
-                promiseConnection.query(`DELETE FROM games_hosted WHERE uuid = ?`, [gameHost.uuid]),
-                promiseConnection.query(`DROP TABLE games_${gameHost.uuid.toLowerCase()}`)
-            ]);
-        } catch (error) {
-            console.error('Error in endGameTable:', error);
-        }
+            await prisma.$transaction([prisma.gamePlayer.deleteMany({ where: { gameUuid: gameHost.uuid } }), prisma.gameHosted.delete({ where: { uuid: gameHost.uuid } })]);
+        } catch (error) { console.error('Error in endGameTable:', error); }
     }
 
     static async getChannelThread(uuid, guild) {
@@ -540,45 +479,12 @@ class GameManager {
         }
     }
 
-    static async getGameStats(uuid) {
-        const promiseConnection = connection.promise();
-        try {
-            const [rows] = await promiseConnection.query(
-                `SELECT * FROM games_hosted WHERE uuid = ?`,
-                [uuid]
-            );
-            return rows[0];
-        } catch (error) {
-            console.error('Error in getGameStats:', error);
-            throw error;
-        }
-    }
+            static async getGameStats(uuid) { return prisma.gameHosted.findUnique({ where: { uuid } }); }
 
-    static async getGameTable(uuid) {
-        const promiseConnection = connection.promise();
-        try {
-            const [rows] = await promiseConnection.query(
-                `SELECT * FROM games_${uuid.toLowerCase()}`
-            );
-            return rows;
-        } catch (error) {
-            console.error('Error in getGameTable:', error);
-            throw error;
-        }
-    }
+            static async getGameTable(uuid) { return prisma.gamePlayer.findMany({ where: { gameUuid: uuid } }); }
 
-    static async queryAsync(sql, params) {
-        const promiseConnection = connection.promise();
-        try {
-            const [rows] = await promiseConnection.query(sql, params);
-            return rows;
-        } catch (error) {
-            console.error('Error in queryAsync:', error);
-            throw error;
-        }
-    }
 
-    static async tablesManager() {
+    static async tablesManager(client) {
         client.on('interactionCreate', async (interaction) => {
             if (!interaction.isButton()) return;
 
@@ -609,23 +515,8 @@ class GameManager {
         });
     }
 
-    static async updateUserStats(userID, isWin, expGain = 10, coinReward = 50) {
-        const promiseConnection = connection.promise();
-        try {
-            const query = `
-                UPDATE profile 
-                SET 
-                    experiences = experiences + ?,
-                    balance = balance + ?,
-                    ${isWin ? 'gameWin = gameWin + 1' : 'gameLoose = gameLoose + 1'}
-                WHERE userID = ?;
-            `;
-
-            await promiseConnection.query(query, [expGain, coinReward, userID]);
-        } catch (error) {
-            console.error('Error in updateUserStats:', error);
-            throw error;
-        }
+            static async updateUserStats(userID, isWin, expGain = 10, coinReward = 50) {
+        await prisma.profile.updateMany({ where: { userId: userID }, data: { experiences: { increment: expGain }, balance: { increment: coinReward } } });
     }
 }
 

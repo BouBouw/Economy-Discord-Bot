@@ -1,0 +1,36 @@
+@import "tailwindcss";
+
+/* Discord dark theme base */
+:root {
+  --discord-bg: #313338;
+  --discord-surface: #2b2d31;
+  --discord-surface-2: #1e1f22;
+  --discord-border: #404249;
+  --discord-text: #dbdee1;
+  --discord-text-muted: #b5bac1;
+  --discord-blurple: #5865f2;
+  --discord-green: #23a55a;
+  --discord-red: #f23f42;
+  --discord-yellow: #f0b232;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--discord-bg);
+  color: var(--discord-text);
+  font-family: 'gg sans', 'Noto Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+}
+
+#root {
+  height: 100vh;
+  width: 100vw;
+}
