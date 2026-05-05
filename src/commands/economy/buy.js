@@ -1,7 +1,7 @@
 const { ApplicationCommandOptionType, ApplicationCommandType } = require("discord.js");
 const Cryptocurrencies = require("../../../handlers/functions/Economy/Cryptocurrencies");
 const Profiles = require("../../../handlers/functions/Profiles");
-const ImageGenerator = require("../../../handlers/functions/Images/Imagegenerator");
+const ImageGenerator = require("../../../handlers/functions/Images/ImageGenerator");
 
 module.exports = {
     name: 'buy',
