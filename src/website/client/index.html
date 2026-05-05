@@ -7,6 +7,8 @@
     <title>Activity</title>
   </head>
   <body>
+    <!-- Visible before React mounts — replaced once JS loads -->
+    <div id="pre-load" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#313338;color:#b5bac1;font-family:sans-serif;font-size:14px;">Chargement…</div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

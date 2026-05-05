@@ -11,6 +11,12 @@ export default function App() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Hide the pre-React loading placeholder
+  useEffect(() => {
+    const el = document.getElementById('pre-load');
+    if (el) el.style.display = 'none';
+  }, []);
+
   useEffect(() => {
     setupDiscordSDK()
       .then(async (discordAuth) => {
@@ -28,7 +34,7 @@ export default function App() {
       })
       .catch((err: unknown) => {
         console.error('[App] Init error:', err);
-        setErrorMsg(err instanceof Error ? err.message : 'Erreur inconnue');
+        setErrorMsg(err instanceof Error ? err.message : String(err));
         setState('error');
       });
   }, []);

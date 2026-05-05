@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
-import { discordSdk } from '../discord';
+import type { DiscordAuth } from '../discord';
 import { getSocket } from '../socket';
 import Layout from '../components/Layout';
 import PlayerCard from '../components/PlayerCard';
 import EconomyBar from '../components/EconomyBar';
 import GameCard from '../components/GameCard';
-import type { DiscordAuth } from '../discord';
 import type { UserProfile, ActivitySession, EconomyUpdate, GameMeta } from '../types';
 
 interface LobbyProps {
@@ -79,8 +78,8 @@ export default function Lobby({ auth, profile }: LobbyProps) {
 
     socket.on('connect', () => {
       socket.emit('join_session', {
-        channelId: discordSdk.channelId,
-        guildId: discordSdk.guildId,
+        channelId: auth.channelId,
+        guildId: auth.guildId,
         userId: auth.userId,
       });
     });

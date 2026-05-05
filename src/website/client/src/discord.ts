@@ -3,7 +3,9 @@ import { DiscordSDK } from '@discord/embedded-app-sdk';
 /** Discord Application ID (from .env via Vite) */
 const CLIENT_ID = import.meta.env.VITE_CLIENT_ID as string;
 
-export const discordSdk = new DiscordSDK(CLIENT_ID);
+// Lazy singleton — initialized inside setupDiscordSDK()
+let _sdk: DiscordSDK | null = null;
+export const getDiscordSdk = () => _sdk!;
 
 export interface DiscordAuth {
   token: string;        // our JWT (from /api/auth/token)
@@ -11,20 +13,25 @@ export interface DiscordAuth {
   username: string;
   avatar: string | null;
   globalName: string | null;
+  channelId: string | null;
+  guildId: string | null;
 }
 
 /**
  * Full Discord Activity SDK initialization + auth flow.
  *
- * 1. Wait for Discord iframe to be ready
- * 2. Authorize → get OAuth2 `code`
- * 3. Exchange `code` server-side → receive JWT
- * 4. Authenticate SDK with the Discord access_token
+ * 1. Instantiate SDK (inside function so errors are catchable)
+ * 2. Wait for Discord iframe to be ready
+ * 3. Authorize → get OAuth2 `code`
+ * 4. Exchange `code` server-side → receive JWT
+ * 5. Authenticate SDK with the Discord access_token
  */
 export async function setupDiscordSDK(): Promise<DiscordAuth> {
-  await discordSdk.ready();
+  _sdk = new DiscordSDK(CLIENT_ID);
 
-  const { code } = await discordSdk.commands.authorize({
+  await _sdk.ready();
+
+  const { code } = await _sdk.commands.authorize({
     client_id: CLIENT_ID,
     response_type: 'code',
     state: '',
@@ -46,16 +53,14 @@ export async function setupDiscordSDK(): Promise<DiscordAuth> {
 
   const { token } = (await res.json()) as { token: string };
 
-  // Authenticate the SDK (needed to use privileged SDK commands later)
-  // We decode the JWT to get the Discord access_token stored inside
-  // (the server embeds it at sign time)
+  // Decode JWT payload to retrieve the Discord access_token
   const [, payloadB64] = token.split('.');
   const payload = JSON.parse(atob(payloadB64)) as {
     userId: string;
     accessToken: string;
   };
 
-  const auth = await discordSdk.commands.authenticate({
+  const auth = await _sdk.commands.authenticate({
     access_token: payload.accessToken,
   });
 
@@ -65,5 +70,7 @@ export async function setupDiscordSDK(): Promise<DiscordAuth> {
     username: auth.user.username,
     avatar: auth.user.avatar ?? null,
     globalName: auth.user.global_name ?? null,
+    channelId: _sdk.channelId,
+    guildId: _sdk.guildId,
   };
 }
